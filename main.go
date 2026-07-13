@@ -7,11 +7,11 @@ import (
 	"os/signal"
 	"syscall"
 
+	pb "github.com/AndrewK4758/shared_protos"
 	"github.com/doc_processor/semantic_cache_service/internal/application"
 	"github.com/doc_processor/semantic_cache_service/internal/infrastructure/ollama"
 	"github.com/doc_processor/semantic_cache_service/internal/infrastructure/qdrant"
 	grpc_handler "github.com/doc_processor/semantic_cache_service/internal/presentation/grpc"
-	pb "github.com/doc_processor/semantic_cache_service/pkg/pb"
 
 	"google.golang.org/grpc"
 )

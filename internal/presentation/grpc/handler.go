@@ -3,8 +3,8 @@ package grpc
 import (
 	"context"
 
+	pb "github.com/AndrewK4758/shared_protos"
 	"github.com/doc_processor/semantic_cache_service/internal/application"
-	"github.com/doc_processor/semantic_cache_service/pkg/pb"
 )
 
 // SemanticCacheHandler implements the SemanticCacheService gRPC interface.

@@ -9,6 +9,7 @@ require (
 )
 
 require (
+	github.com/AndrewK4758/shared_protos v0.0.0-20260709011136-f55ddc746c56
 	golang.org/x/net v0.53.0 // indirect
 	golang.org/x/sys v0.45.0 // indirect
 	golang.org/x/text v0.37.0 // indirect
