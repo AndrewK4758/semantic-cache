@@ -82,7 +82,7 @@ func (c *Client) Search(ctx context.Context, vector []float32, documentType stri
 		if payloadVal, ok := point.Payload["json_payload"]; ok {
 			payloadStr = payloadVal.GetStringValue()
 		}
-		
+
 		docTypeStr := ""
 		if typeVal, ok := point.Payload["document_type"]; ok {
 			docTypeStr = typeVal.GetStringValue()
@@ -115,10 +115,10 @@ func (c *Client) Upsert(ctx context.Context, record domain.CacheRecord) error {
 	// We need a UUID for Qdrant. The ID generated in application layer is a hex string (sha256).
 	// To make it a valid UUID, we can format the first 32 hex chars as a UUID (8-4-4-4-12) or use string ID.
 	// Since Qdrant supports UUIDs specifically, we'll format the hex hash as a UUID.
-	
+
 	// Create UUID string from hex: 8-4-4-4-12
 	if len(record.ID) >= 32 {
-		record.ID = fmt.Sprintf("%s-%s-%s-%s-%s", 
+		record.ID = fmt.Sprintf("%s-%s-%s-%s-%s",
 			record.ID[0:8], record.ID[8:12], record.ID[12:16], record.ID[16:20], record.ID[20:32])
 	}
 
@@ -141,11 +141,15 @@ func (c *Client) Upsert(ctx context.Context, record domain.CacheRecord) error {
 		CollectionName: c.collection,
 		Points: []*pb.PointStruct{
 			{
-				Id:      pointId,
+				Id: pointId,
 				Vectors: &pb.Vectors{
 					VectorsOptions: &pb.Vectors_Vector{
 						Vector: &pb.Vector{
-							Data: record.Vector,
+							Vector: &pb.Vector_Dense{
+								Dense: &pb.DenseVector{
+									Data: record.Vector,
+								},
+							},
 						},
 					},
 				},

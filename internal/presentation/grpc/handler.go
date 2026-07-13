@@ -4,7 +4,7 @@ import (
 	"context"
 
 	"github.com/doc_processor/semantic_cache_service/internal/application"
-	pb "github.com/doc_processor/semantic_cache_service/pkg/pb"
+	"github.com/doc_processor/semantic_cache_service/pkg/pb"
 )
 
 // SemanticCacheHandler implements the SemanticCacheService gRPC interface.
