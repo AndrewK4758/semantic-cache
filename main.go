@@ -18,7 +18,7 @@ import (
 
 func main() {
 	// Configuration
-	grpcPort := getEnv("GRPC_PORT", "50053")
+	grpcPort := getEnv("GRPC_PORT", "50055")
 	qdrantAddr := getEnv("QDRANT_ADDR", "localhost:6334")
 	ollamaURL := getEnv("OLLAMA_URL", "http://localhost:11434")
 	ollamaModel := getEnv("OLLAMA_MODEL", "nomic-embed-text")
