@@ -5,15 +5,10 @@ import (
 	"crypto/sha256"
 	"encoding/hex"
 	"fmt"
-	"math/rand"
-	"time"
+	"log"
 
 	"github.com/doc_processor/semantic_cache_service/internal/domain"
 )
-
-func init() {
-	rand.Seed(time.Now().UnixNano())
-}
 
 // SemanticCacheApp coordinates the semantic cache use cases.
 type SemanticCacheApp struct {
@@ -31,22 +26,33 @@ func NewSemanticCacheApp(embedder domain.EmbeddingService, store domain.VectorSt
 
 // CheckCache processes the Check Cache use case.
 func (a *SemanticCacheApp) CheckCache(ctx context.Context, text string, metadata map[string]string, threshold float32) (hit bool, extractedPayload string, confidence float32, err error) {
+	log.Printf("INFO: [SemanticCacheApp] CheckCache invoked. Input Text Length: %d, Threshold: %.2f", len(text), threshold)
 
+	log.Printf("INFO: [SemanticCacheApp] Generating embedding for input text...")
 	vector, err := a.embedder.Generate(ctx, text)
 	if err != nil {
+		log.Printf("ERROR: [SemanticCacheApp] Failed to generate embedding: %v", err)
 		return false, "", 0, fmt.Errorf("action failed for job CheckCache: embedding generation error: %w", err)
 	}
+	log.Printf("INFO: [SemanticCacheApp] Successfully generated embedding vector of length %d", len(vector))
 
+	log.Printf("INFO: [SemanticCacheApp] Searching Qdrant Vector Store for top 1 match...")
 	results, err := a.store.Search(ctx, vector, metadata, 1)
 	if err != nil {
+		log.Printf("ERROR: [SemanticCacheApp] Failed to search vector store: %v", err)
 		return false, "", 0, fmt.Errorf("action failed for job CheckCache: vector search error: %w", err)
 	}
 
 	if len(results) > 0 {
 		topMatch := results[0]
+		log.Printf("INFO: [SemanticCacheApp] Vector search returned top match with Cosine Similarity Score: %.4f (Threshold: %.2f)", topMatch.Score, threshold)
 		if topMatch.Score >= threshold {
+			log.Printf("INFO: [SemanticCacheApp] CACHE HIT! Score %.4f exceeds threshold. Returning cached payload.", topMatch.Score)
 			return true, topMatch.Record.JSONPayload, topMatch.Score, nil
 		}
+		log.Printf("INFO: [SemanticCacheApp] CACHE MISS. Score %.4f is below threshold %.2f.", topMatch.Score, threshold)
+	} else {
+		log.Printf("INFO: [SemanticCacheApp] CACHE MISS. Vector search returned 0 results.")
 	}
 
 	return false, "", 0, nil
@@ -54,8 +60,12 @@ func (a *SemanticCacheApp) CheckCache(ctx context.Context, text string, metadata
 
 // StoreExtraction processes the Store Extraction use case.
 func (a *SemanticCacheApp) StoreExtraction(ctx context.Context, text string, metadata map[string]string, extractedPayload string) error {
+	log.Printf("INFO: [SemanticCacheApp] StoreExtraction invoked. Input Text Length: %d, Payload Length: %d", len(text), len(extractedPayload))
+
+	log.Printf("INFO: [SemanticCacheApp] Generating embedding for input text to store...")
 	vector, err := a.embedder.Generate(ctx, text)
 	if err != nil {
+		log.Printf("ERROR: [SemanticCacheApp] Failed to generate embedding: %v", err)
 		return fmt.Errorf("action failed for job StoreExtraction: embedding generation error: %w", err)
 	}
 
@@ -66,6 +76,7 @@ func (a *SemanticCacheApp) StoreExtraction(ctx context.Context, text string, met
 	}
 	hash := sha256.Sum256([]byte(hashStr))
 	recordID := hex.EncodeToString(hash[:])
+	log.Printf("DEBUG: [SemanticCacheApp] Generated Record ID: %s", recordID)
 
 	record := domain.CacheRecord{
 		ID:          recordID,
@@ -74,9 +85,12 @@ func (a *SemanticCacheApp) StoreExtraction(ctx context.Context, text string, met
 		JSONPayload: extractedPayload,
 	}
 
+	log.Printf("INFO: [SemanticCacheApp] Upserting record into Qdrant Vector Store...")
 	if err := a.store.Upsert(ctx, record); err != nil {
+		log.Printf("ERROR: [SemanticCacheApp] Failed to upsert record: %v", err)
 		return fmt.Errorf("action failed for job StoreExtraction: vector upsert error: %w", err)
 	}
 
+	log.Printf("INFO: [SemanticCacheApp] Successfully stored cache record.")
 	return nil
 }
