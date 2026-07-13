@@ -9,23 +9,28 @@ import (
 
 	pb "github.com/AndrewK4758/shared_protos"
 	"github.com/doc_processor/semantic_cache_service/internal/application"
-	"github.com/doc_processor/semantic_cache_service/internal/infrastructure/ollama"
+	"github.com/doc_processor/semantic_cache_service/internal/infrastructure/openai"
 	"github.com/doc_processor/semantic_cache_service/internal/infrastructure/qdrant"
 	grpc_handler "github.com/doc_processor/semantic_cache_service/internal/presentation/grpc"
+	"github.com/joho/godotenv"
 
 	"google.golang.org/grpc"
+	"google.golang.org/grpc/reflection"
 )
 
 func main() {
+	// Attempt to load .env, but ignore error if it doesn't exist
+	_ = godotenv.Load()
+
 	// Configuration
-	grpcPort := getEnv("GRPC_PORT", "50055")
-	qdrantAddr := getEnv("QDRANT_ADDR", "localhost:6334")
-	ollamaURL := getEnv("OLLAMA_URL", "http://localhost:11434")
-	ollamaModel := getEnv("OLLAMA_MODEL", "nomic-embed-text")
-	collectionName := getEnv("QDRANT_COLLECTION", "semantic_cache")
+	grpcPort := getEnv("SERVER_PORT", "50055")
+	qdrantAddr := getEnv("QDRANT_URL", "localhost:6334")
+	openaiURL := getEnv("OPENAI_BASE_URL", "http://localhost:11434/v1")
+	openaiModel := getEnv("OPENAI_EMBEDDING_MODEL", "nomic-embed-text")
+	collectionName := getEnv("QDRANT_COLLECTION", "document_chunks")
 
 	// Infrastructure
-	ollamaClient := ollama.NewClient(ollamaURL, ollamaModel)
+	openaiClient := openai.NewClient(openaiURL, openaiModel)
 
 	qdrantClient, err := qdrant.NewClient(qdrantAddr, collectionName)
 	if err != nil {
@@ -34,7 +39,7 @@ func main() {
 	defer qdrantClient.Close()
 
 	// Application
-	app := application.NewSemanticCacheApp(ollamaClient, qdrantClient)
+	app := application.NewSemanticCacheApp(openaiClient, qdrantClient)
 
 	// Presentation
 	handler := grpc_handler.NewSemanticCacheHandler(app)
@@ -47,6 +52,7 @@ func main() {
 
 	grpcServer := grpc.NewServer()
 	pb.RegisterSemanticCacheServiceServer(grpcServer, handler)
+	reflection.Register(grpcServer)
 
 	// Graceful Shutdown
 	go func() {

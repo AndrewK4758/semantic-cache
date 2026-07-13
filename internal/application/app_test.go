@@ -121,7 +121,7 @@ func TestSemanticCacheApp_CheckCache(t *testing.T) {
 		{
 			name: "Error - Embedding failure",
 			embedFn: func(ctx context.Context, text string) ([]float32, error) {
-				return nil, errors.New("ollama offline")
+				return nil, errors.New("openai offline")
 			},
 			args: args{
 				text:      "sample invoice text",
@@ -196,7 +196,7 @@ func TestSemanticCacheApp_StoreExtraction(t *testing.T) {
 		{
 			name: "Error - Embedding failure",
 			embedFn: func(ctx context.Context, text string) ([]float32, error) {
-				return nil, errors.New("ollama offline")
+				return nil, errors.New("openai offline")
 			},
 			args: args{
 				text:             "sample invoice text",
