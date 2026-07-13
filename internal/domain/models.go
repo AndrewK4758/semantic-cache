@@ -2,10 +2,10 @@ package domain
 
 // CacheRecord represents a stored semantic embedding and its associated metadata/payload.
 type CacheRecord struct {
-	ID           string
-	DocumentType string
-	Vector       []float32
-	JSONPayload  string
+	ID          string
+	Metadata    map[string]string
+	Vector      []float32
+	JSONPayload string
 }
 
 // SearchResult wraps a CacheRecord with its similarity score.

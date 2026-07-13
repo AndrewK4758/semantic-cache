@@ -2,7 +2,7 @@
 // versions:
 // 	protoc-gen-go v1.36.11
 // 	protoc        v7.35.1
-// source: pkg/pb/semantic_cache.proto
+// source: semantic_cache.proto
 
 package pb
 
@@ -24,7 +24,7 @@ const (
 type CheckCacheRequest struct {
 	state         protoimpl.MessageState `protogen:"open.v1"`
 	Text          string                 `protobuf:"bytes,1,opt,name=text,proto3" json:"text,omitempty"`
-	DocumentType  string                 `protobuf:"bytes,2,opt,name=document_type,json=documentType,proto3" json:"document_type,omitempty"`
+	Metadata      map[string]string      `protobuf:"bytes,2,rep,name=metadata,proto3" json:"metadata,omitempty" protobuf_key:"bytes,1,opt,name=key" protobuf_val:"bytes,2,opt,name=value"`
 	Threshold     float32                `protobuf:"fixed32,3,opt,name=threshold,proto3" json:"threshold,omitempty"`
 	unknownFields protoimpl.UnknownFields
 	sizeCache     protoimpl.SizeCache
@@ -32,7 +32,7 @@ type CheckCacheRequest struct {
 
 func (x *CheckCacheRequest) Reset() {
 	*x = CheckCacheRequest{}
-	mi := &file_pkg_pb_semantic_cache_proto_msgTypes[0]
+	mi := &file_semantic_cache_proto_msgTypes[0]
 	ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
 	ms.StoreMessageInfo(mi)
 }
@@ -44,7 +44,7 @@ func (x *CheckCacheRequest) String() string {
 func (*CheckCacheRequest) ProtoMessage() {}
 
 func (x *CheckCacheRequest) ProtoReflect() protoreflect.Message {
-	mi := &file_pkg_pb_semantic_cache_proto_msgTypes[0]
+	mi := &file_semantic_cache_proto_msgTypes[0]
 	if x != nil {
 		ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
 		if ms.LoadMessageInfo() == nil {
@@ -57,7 +57,7 @@ func (x *CheckCacheRequest) ProtoReflect() protoreflect.Message {
 
 // Deprecated: Use CheckCacheRequest.ProtoReflect.Descriptor instead.
 func (*CheckCacheRequest) Descriptor() ([]byte, []int) {
-	return file_pkg_pb_semantic_cache_proto_rawDescGZIP(), []int{0}
+	return file_semantic_cache_proto_rawDescGZIP(), []int{0}
 }
 
 func (x *CheckCacheRequest) GetText() string {
@@ -67,11 +67,11 @@ func (x *CheckCacheRequest) GetText() string {
 	return ""
 }
 
-func (x *CheckCacheRequest) GetDocumentType() string {
+func (x *CheckCacheRequest) GetMetadata() map[string]string {
 	if x != nil {
-		return x.DocumentType
+		return x.Metadata
 	}
-	return ""
+	return nil
 }
 
 func (x *CheckCacheRequest) GetThreshold() float32 {
@@ -92,7 +92,7 @@ type CheckCacheResponse struct {
 
 func (x *CheckCacheResponse) Reset() {
 	*x = CheckCacheResponse{}
-	mi := &file_pkg_pb_semantic_cache_proto_msgTypes[1]
+	mi := &file_semantic_cache_proto_msgTypes[1]
 	ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
 	ms.StoreMessageInfo(mi)
 }
@@ -104,7 +104,7 @@ func (x *CheckCacheResponse) String() string {
 func (*CheckCacheResponse) ProtoMessage() {}
 
 func (x *CheckCacheResponse) ProtoReflect() protoreflect.Message {
-	mi := &file_pkg_pb_semantic_cache_proto_msgTypes[1]
+	mi := &file_semantic_cache_proto_msgTypes[1]
 	if x != nil {
 		ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
 		if ms.LoadMessageInfo() == nil {
@@ -117,7 +117,7 @@ func (x *CheckCacheResponse) ProtoReflect() protoreflect.Message {
 
 // Deprecated: Use CheckCacheResponse.ProtoReflect.Descriptor instead.
 func (*CheckCacheResponse) Descriptor() ([]byte, []int) {
-	return file_pkg_pb_semantic_cache_proto_rawDescGZIP(), []int{1}
+	return file_semantic_cache_proto_rawDescGZIP(), []int{1}
 }
 
 func (x *CheckCacheResponse) GetHit() bool {
@@ -144,7 +144,7 @@ func (x *CheckCacheResponse) GetConfidence() float32 {
 type StoreExtractionRequest struct {
 	state            protoimpl.MessageState `protogen:"open.v1"`
 	Text             string                 `protobuf:"bytes,1,opt,name=text,proto3" json:"text,omitempty"`
-	DocumentType     string                 `protobuf:"bytes,2,opt,name=document_type,json=documentType,proto3" json:"document_type,omitempty"`
+	Metadata         map[string]string      `protobuf:"bytes,2,rep,name=metadata,proto3" json:"metadata,omitempty" protobuf_key:"bytes,1,opt,name=key" protobuf_val:"bytes,2,opt,name=value"`
 	ExtractedPayload string                 `protobuf:"bytes,3,opt,name=extracted_payload,json=extractedPayload,proto3" json:"extracted_payload,omitempty"`
 	unknownFields    protoimpl.UnknownFields
 	sizeCache        protoimpl.SizeCache
@@ -152,7 +152,7 @@ type StoreExtractionRequest struct {
 
 func (x *StoreExtractionRequest) Reset() {
 	*x = StoreExtractionRequest{}
-	mi := &file_pkg_pb_semantic_cache_proto_msgTypes[2]
+	mi := &file_semantic_cache_proto_msgTypes[2]
 	ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
 	ms.StoreMessageInfo(mi)
 }
@@ -164,7 +164,7 @@ func (x *StoreExtractionRequest) String() string {
 func (*StoreExtractionRequest) ProtoMessage() {}
 
 func (x *StoreExtractionRequest) ProtoReflect() protoreflect.Message {
-	mi := &file_pkg_pb_semantic_cache_proto_msgTypes[2]
+	mi := &file_semantic_cache_proto_msgTypes[2]
 	if x != nil {
 		ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
 		if ms.LoadMessageInfo() == nil {
@@ -177,7 +177,7 @@ func (x *StoreExtractionRequest) ProtoReflect() protoreflect.Message {
 
 // Deprecated: Use StoreExtractionRequest.ProtoReflect.Descriptor instead.
 func (*StoreExtractionRequest) Descriptor() ([]byte, []int) {
-	return file_pkg_pb_semantic_cache_proto_rawDescGZIP(), []int{2}
+	return file_semantic_cache_proto_rawDescGZIP(), []int{2}
 }
 
 func (x *StoreExtractionRequest) GetText() string {
@@ -187,11 +187,11 @@ func (x *StoreExtractionRequest) GetText() string {
 	return ""
 }
 
-func (x *StoreExtractionRequest) GetDocumentType() string {
+func (x *StoreExtractionRequest) GetMetadata() map[string]string {
 	if x != nil {
-		return x.DocumentType
+		return x.Metadata
 	}
-	return ""
+	return nil
 }
 
 func (x *StoreExtractionRequest) GetExtractedPayload() string {
@@ -210,7 +210,7 @@ type StoreExtractionResponse struct {
 
 func (x *StoreExtractionResponse) Reset() {
 	*x = StoreExtractionResponse{}
-	mi := &file_pkg_pb_semantic_cache_proto_msgTypes[3]
+	mi := &file_semantic_cache_proto_msgTypes[3]
 	ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
 	ms.StoreMessageInfo(mi)
 }
@@ -222,7 +222,7 @@ func (x *StoreExtractionResponse) String() string {
 func (*StoreExtractionResponse) ProtoMessage() {}
 
 func (x *StoreExtractionResponse) ProtoReflect() protoreflect.Message {
-	mi := &file_pkg_pb_semantic_cache_proto_msgTypes[3]
+	mi := &file_semantic_cache_proto_msgTypes[3]
 	if x != nil {
 		ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
 		if ms.LoadMessageInfo() == nil {
@@ -235,7 +235,7 @@ func (x *StoreExtractionResponse) ProtoReflect() protoreflect.Message {
 
 // Deprecated: Use StoreExtractionResponse.ProtoReflect.Descriptor instead.
 func (*StoreExtractionResponse) Descriptor() ([]byte, []int) {
-	return file_pkg_pb_semantic_cache_proto_rawDescGZIP(), []int{3}
+	return file_semantic_cache_proto_rawDescGZIP(), []int{3}
 }
 
 func (x *StoreExtractionResponse) GetSuccess() bool {
@@ -245,25 +245,31 @@ func (x *StoreExtractionResponse) GetSuccess() bool {
 	return false
 }
 
-var File_pkg_pb_semantic_cache_proto protoreflect.FileDescriptor
+var File_semantic_cache_proto protoreflect.FileDescriptor
 
-const file_pkg_pb_semantic_cache_proto_rawDesc = "" +
+const file_semantic_cache_proto_rawDesc = "" +
 	"\n" +
-	"\x1bpkg/pb/semantic_cache.proto\x12\x10semanticcache.v1\"j\n" +
+	"\x14semantic_cache.proto\x12\x10semanticcache.v1\"\xd1\x01\n" +
 	"\x11CheckCacheRequest\x12\x12\n" +
-	"\x04text\x18\x01 \x01(\tR\x04text\x12#\n" +
-	"\rdocument_type\x18\x02 \x01(\tR\fdocumentType\x12\x1c\n" +
-	"\tthreshold\x18\x03 \x01(\x02R\tthreshold\"s\n" +
+	"\x04text\x18\x01 \x01(\tR\x04text\x12M\n" +
+	"\bmetadata\x18\x02 \x03(\v21.semanticcache.v1.CheckCacheRequest.MetadataEntryR\bmetadata\x12\x1c\n" +
+	"\tthreshold\x18\x03 \x01(\x02R\tthreshold\x1a;\n" +
+	"\rMetadataEntry\x12\x10\n" +
+	"\x03key\x18\x01 \x01(\tR\x03key\x12\x14\n" +
+	"\x05value\x18\x02 \x01(\tR\x05value:\x028\x01\"s\n" +
 	"\x12CheckCacheResponse\x12\x10\n" +
 	"\x03hit\x18\x01 \x01(\bR\x03hit\x12+\n" +
 	"\x11extracted_payload\x18\x02 \x01(\tR\x10extractedPayload\x12\x1e\n" +
 	"\n" +
 	"confidence\x18\x03 \x01(\x02R\n" +
-	"confidence\"~\n" +
+	"confidence\"\xea\x01\n" +
 	"\x16StoreExtractionRequest\x12\x12\n" +
-	"\x04text\x18\x01 \x01(\tR\x04text\x12#\n" +
-	"\rdocument_type\x18\x02 \x01(\tR\fdocumentType\x12+\n" +
-	"\x11extracted_payload\x18\x03 \x01(\tR\x10extractedPayload\"3\n" +
+	"\x04text\x18\x01 \x01(\tR\x04text\x12R\n" +
+	"\bmetadata\x18\x02 \x03(\v26.semanticcache.v1.StoreExtractionRequest.MetadataEntryR\bmetadata\x12+\n" +
+	"\x11extracted_payload\x18\x03 \x01(\tR\x10extractedPayload\x1a;\n" +
+	"\rMetadataEntry\x12\x10\n" +
+	"\x03key\x18\x01 \x01(\tR\x03key\x12\x14\n" +
+	"\x05value\x18\x02 \x01(\tR\x05value:\x028\x01\"3\n" +
 	"\x17StoreExtractionResponse\x12\x18\n" +
 	"\asuccess\x18\x01 \x01(\bR\asuccess2\xd7\x01\n" +
 	"\x14SemanticCacheService\x12W\n" +
@@ -272,56 +278,60 @@ const file_pkg_pb_semantic_cache_proto_rawDesc = "" +
 	"\x0fStoreExtraction\x12(.semanticcache.v1.StoreExtractionRequest\x1a).semanticcache.v1.StoreExtractionResponseB8Z6github.com/doc_processor/semantic_cache_service/pkg/pbb\x06proto3"
 
 var (
-	file_pkg_pb_semantic_cache_proto_rawDescOnce sync.Once
-	file_pkg_pb_semantic_cache_proto_rawDescData []byte
+	file_semantic_cache_proto_rawDescOnce sync.Once
+	file_semantic_cache_proto_rawDescData []byte
 )
 
-func file_pkg_pb_semantic_cache_proto_rawDescGZIP() []byte {
-	file_pkg_pb_semantic_cache_proto_rawDescOnce.Do(func() {
-		file_pkg_pb_semantic_cache_proto_rawDescData = protoimpl.X.CompressGZIP(unsafe.Slice(unsafe.StringData(file_pkg_pb_semantic_cache_proto_rawDesc), len(file_pkg_pb_semantic_cache_proto_rawDesc)))
+func file_semantic_cache_proto_rawDescGZIP() []byte {
+	file_semantic_cache_proto_rawDescOnce.Do(func() {
+		file_semantic_cache_proto_rawDescData = protoimpl.X.CompressGZIP(unsafe.Slice(unsafe.StringData(file_semantic_cache_proto_rawDesc), len(file_semantic_cache_proto_rawDesc)))
 	})
-	return file_pkg_pb_semantic_cache_proto_rawDescData
+	return file_semantic_cache_proto_rawDescData
 }
 
-var file_pkg_pb_semantic_cache_proto_msgTypes = make([]protoimpl.MessageInfo, 4)
-var file_pkg_pb_semantic_cache_proto_goTypes = []any{
+var file_semantic_cache_proto_msgTypes = make([]protoimpl.MessageInfo, 6)
+var file_semantic_cache_proto_goTypes = []any{
 	(*CheckCacheRequest)(nil),       // 0: semanticcache.v1.CheckCacheRequest
 	(*CheckCacheResponse)(nil),      // 1: semanticcache.v1.CheckCacheResponse
 	(*StoreExtractionRequest)(nil),  // 2: semanticcache.v1.StoreExtractionRequest
 	(*StoreExtractionResponse)(nil), // 3: semanticcache.v1.StoreExtractionResponse
+	nil,                             // 4: semanticcache.v1.CheckCacheRequest.MetadataEntry
+	nil,                             // 5: semanticcache.v1.StoreExtractionRequest.MetadataEntry
 }
-var file_pkg_pb_semantic_cache_proto_depIdxs = []int32{
-	0, // 0: semanticcache.v1.SemanticCacheService.CheckCache:input_type -> semanticcache.v1.CheckCacheRequest
-	2, // 1: semanticcache.v1.SemanticCacheService.StoreExtraction:input_type -> semanticcache.v1.StoreExtractionRequest
-	1, // 2: semanticcache.v1.SemanticCacheService.CheckCache:output_type -> semanticcache.v1.CheckCacheResponse
-	3, // 3: semanticcache.v1.SemanticCacheService.StoreExtraction:output_type -> semanticcache.v1.StoreExtractionResponse
-	2, // [2:4] is the sub-list for method output_type
-	0, // [0:2] is the sub-list for method input_type
-	0, // [0:0] is the sub-list for extension type_name
-	0, // [0:0] is the sub-list for extension extendee
-	0, // [0:0] is the sub-list for field type_name
+var file_semantic_cache_proto_depIdxs = []int32{
+	4, // 0: semanticcache.v1.CheckCacheRequest.metadata:type_name -> semanticcache.v1.CheckCacheRequest.MetadataEntry
+	5, // 1: semanticcache.v1.StoreExtractionRequest.metadata:type_name -> semanticcache.v1.StoreExtractionRequest.MetadataEntry
+	0, // 2: semanticcache.v1.SemanticCacheService.CheckCache:input_type -> semanticcache.v1.CheckCacheRequest
+	2, // 3: semanticcache.v1.SemanticCacheService.StoreExtraction:input_type -> semanticcache.v1.StoreExtractionRequest
+	1, // 4: semanticcache.v1.SemanticCacheService.CheckCache:output_type -> semanticcache.v1.CheckCacheResponse
+	3, // 5: semanticcache.v1.SemanticCacheService.StoreExtraction:output_type -> semanticcache.v1.StoreExtractionResponse
+	4, // [4:6] is the sub-list for method output_type
+	2, // [2:4] is the sub-list for method input_type
+	2, // [2:2] is the sub-list for extension type_name
+	2, // [2:2] is the sub-list for extension extendee
+	0, // [0:2] is the sub-list for field type_name
 }
 
-func init() { file_pkg_pb_semantic_cache_proto_init() }
-func file_pkg_pb_semantic_cache_proto_init() {
-	if File_pkg_pb_semantic_cache_proto != nil {
+func init() { file_semantic_cache_proto_init() }
+func file_semantic_cache_proto_init() {
+	if File_semantic_cache_proto != nil {
 		return
 	}
 	type x struct{}
 	out := protoimpl.TypeBuilder{
 		File: protoimpl.DescBuilder{
 			GoPackagePath: reflect.TypeOf(x{}).PkgPath(),
-			RawDescriptor: unsafe.Slice(unsafe.StringData(file_pkg_pb_semantic_cache_proto_rawDesc), len(file_pkg_pb_semantic_cache_proto_rawDesc)),
+			RawDescriptor: unsafe.Slice(unsafe.StringData(file_semantic_cache_proto_rawDesc), len(file_semantic_cache_proto_rawDesc)),
 			NumEnums:      0,
-			NumMessages:   4,
+			NumMessages:   6,
 			NumExtensions: 0,
 			NumServices:   1,
 		},
-		GoTypes:           file_pkg_pb_semantic_cache_proto_goTypes,
-		DependencyIndexes: file_pkg_pb_semantic_cache_proto_depIdxs,
-		MessageInfos:      file_pkg_pb_semantic_cache_proto_msgTypes,
+		GoTypes:           file_semantic_cache_proto_goTypes,
+		DependencyIndexes: file_semantic_cache_proto_depIdxs,
+		MessageInfos:      file_semantic_cache_proto_msgTypes,
 	}.Build()
-	File_pkg_pb_semantic_cache_proto = out.File
-	file_pkg_pb_semantic_cache_proto_goTypes = nil
-	file_pkg_pb_semantic_cache_proto_depIdxs = nil
+	File_semantic_cache_proto = out.File
+	file_semantic_cache_proto_goTypes = nil
+	file_semantic_cache_proto_depIdxs = nil
 }

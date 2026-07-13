@@ -2,7 +2,7 @@
 // versions:
 // - protoc-gen-go-grpc v1.6.2
 // - protoc             v7.35.1
-// source: pkg/pb/semantic_cache.proto
+// source: semantic_cache.proto
 
 package pb
 
@@ -155,5 +155,5 @@ var SemanticCacheService_ServiceDesc = grpc.ServiceDesc{
 		},
 	},
 	Streams:  []grpc.StreamDesc{},
-	Metadata: "pkg/pb/semantic_cache.proto",
+	Metadata: "semantic_cache.proto",
 }

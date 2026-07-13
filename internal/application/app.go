@@ -24,13 +24,13 @@ func NewSemanticCacheApp(embedder domain.EmbeddingService, store domain.VectorSt
 }
 
 // CheckCache processes the Check Cache use case.
-func (a *SemanticCacheApp) CheckCache(ctx context.Context, text, documentType string, threshold float32) (hit bool, extractedPayload string, confidence float32, err error) {
+func (a *SemanticCacheApp) CheckCache(ctx context.Context, text string, metadata map[string]string, threshold float32) (hit bool, extractedPayload string, confidence float32, err error) {
 	vector, err := a.embedder.Generate(ctx, text)
 	if err != nil {
 		return false, "", 0, fmt.Errorf("action failed for job CheckCache: embedding generation error: %w", err)
 	}
 
-	results, err := a.store.Search(ctx, vector, documentType, 1)
+	results, err := a.store.Search(ctx, vector, metadata, 1)
 	if err != nil {
 		return false, "", 0, fmt.Errorf("action failed for job CheckCache: vector search error: %w", err)
 	}
@@ -46,21 +46,25 @@ func (a *SemanticCacheApp) CheckCache(ctx context.Context, text, documentType st
 }
 
 // StoreExtraction processes the Store Extraction use case.
-func (a *SemanticCacheApp) StoreExtraction(ctx context.Context, text, documentType, extractedPayload string) error {
+func (a *SemanticCacheApp) StoreExtraction(ctx context.Context, text string, metadata map[string]string, extractedPayload string) error {
 	vector, err := a.embedder.Generate(ctx, text)
 	if err != nil {
 		return fmt.Errorf("action failed for job StoreExtraction: embedding generation error: %w", err)
 	}
 
-	// Generate a deterministic ID based on text and documentType
-	hash := sha256.Sum256([]byte(text + documentType))
+	// Generate a deterministic ID based on text and metadata
+	hashStr := text
+	for k, v := range metadata {
+		hashStr += k + ":" + v + "|"
+	}
+	hash := sha256.Sum256([]byte(hashStr))
 	recordID := hex.EncodeToString(hash[:])
 
 	record := domain.CacheRecord{
-		ID:           recordID,
-		DocumentType: documentType,
-		Vector:       vector,
-		JSONPayload:  extractedPayload,
+		ID:          recordID,
+		Metadata:    metadata,
+		Vector:      vector,
+		JSONPayload: extractedPayload,
 	}
 
 	if err := a.store.Upsert(ctx, record); err != nil {

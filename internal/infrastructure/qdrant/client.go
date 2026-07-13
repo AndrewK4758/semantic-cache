@@ -40,23 +40,26 @@ func (c *Client) Close() {
 }
 
 // Search implements the domain.VectorStore interface.
-func (c *Client) Search(ctx context.Context, vector []float32, documentType string, limit int) ([]domain.SearchResult, error) {
-	// Construct the metadata filter for document_type
-	filter := &pb.Filter{
-		Must: []*pb.Condition{
-			{
-				ConditionOneOf: &pb.Condition_Field{
-					Field: &pb.FieldCondition{
-						Key: "document_type",
-						Match: &pb.Match{
-							MatchValue: &pb.Match_Keyword{
-								Keyword: documentType,
-							},
+func (c *Client) Search(ctx context.Context, vector []float32, metadata map[string]string, limit int) ([]domain.SearchResult, error) {
+	// Construct the metadata filters
+	var conditions []*pb.Condition
+	for k, v := range metadata {
+		conditions = append(conditions, &pb.Condition{
+			ConditionOneOf: &pb.Condition_Field{
+				Field: &pb.FieldCondition{
+					Key: k,
+					Match: &pb.Match{
+						MatchValue: &pb.Match_Keyword{
+							Keyword: v,
 						},
 					},
 				},
 			},
-		},
+		})
+	}
+
+	filter := &pb.Filter{
+		Must: conditions,
 	}
 
 	req := &pb.SearchPoints{
@@ -83,9 +86,11 @@ func (c *Client) Search(ctx context.Context, vector []float32, documentType stri
 			payloadStr = payloadVal.GetStringValue()
 		}
 
-		docTypeStr := ""
-		if typeVal, ok := point.Payload["document_type"]; ok {
-			docTypeStr = typeVal.GetStringValue()
+		metadata := make(map[string]string)
+		for k, v := range point.Payload {
+			if k != "json_payload" {
+				metadata[k] = v.GetStringValue()
+			}
 		}
 
 		// Extract ID
@@ -98,10 +103,10 @@ func (c *Client) Search(ctx context.Context, vector []float32, documentType stri
 
 		results = append(results, domain.SearchResult{
 			Record: domain.CacheRecord{
-				ID:           idStr,
-				DocumentType: docTypeStr,
-				Vector:       vector,
-				JSONPayload:  payloadStr,
+				ID:          idStr,
+				Metadata:    metadata,
+				Vector:      vector,
+				JSONPayload: payloadStr,
 			},
 			Score: point.Score,
 		})
@@ -129,12 +134,15 @@ func (c *Client) Upsert(ctx context.Context, record domain.CacheRecord) error {
 	}
 
 	payload := map[string]*pb.Value{
-		"document_type": {
-			Kind: &pb.Value_StringValue{StringValue: record.DocumentType},
-		},
 		"json_payload": {
 			Kind: &pb.Value_StringValue{StringValue: record.JSONPayload},
 		},
+	}
+
+	for k, v := range record.Metadata {
+		payload[k] = &pb.Value{
+			Kind: &pb.Value_StringValue{StringValue: v},
+		}
 	}
 
 	req := &pb.UpsertPoints{

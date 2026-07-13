@@ -22,7 +22,7 @@ func NewSemanticCacheHandler(app *application.SemanticCacheApp) *SemanticCacheHa
 
 // CheckCache handles the CheckCache gRPC request.
 func (h *SemanticCacheHandler) CheckCache(ctx context.Context, req *pb.CheckCacheRequest) (*pb.CheckCacheResponse, error) {
-	hit, payload, confidence, err := h.app.CheckCache(ctx, req.Text, req.DocumentType, req.Threshold)
+	hit, payload, confidence, err := h.app.CheckCache(ctx, req.Text, req.Metadata, req.Threshold)
 	if err != nil {
 		return nil, err
 	}
@@ -36,7 +36,7 @@ func (h *SemanticCacheHandler) CheckCache(ctx context.Context, req *pb.CheckCach
 
 // StoreExtraction handles the StoreExtraction gRPC request.
 func (h *SemanticCacheHandler) StoreExtraction(ctx context.Context, req *pb.StoreExtractionRequest) (*pb.StoreExtractionResponse, error) {
-	err := h.app.StoreExtraction(ctx, req.Text, req.DocumentType, req.ExtractedPayload)
+	err := h.app.StoreExtraction(ctx, req.Text, req.Metadata, req.ExtractedPayload)
 	if err != nil {
 		return &pb.StoreExtractionResponse{Success: false}, err
 	}
