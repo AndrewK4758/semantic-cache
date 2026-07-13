@@ -1,0 +1,30 @@
+syntax = "proto3";
+package semanticcache.v1;
+option go_package = "github.com/doc_processor/semantic_cache_service/pkg/pb";
+
+service SemanticCacheService {
+  rpc CheckCache(CheckCacheRequest) returns (CheckCacheResponse);
+  rpc StoreExtraction(StoreExtractionRequest) returns (StoreExtractionResponse);
+}
+
+message CheckCacheRequest {
+  string text = 1;
+  string document_type = 2;
+  float threshold = 3;
+}
+
+message CheckCacheResponse {
+  bool hit = 1;
+  string extracted_payload = 2;
+  float confidence = 3;
+}
+
+message StoreExtractionRequest {
+  string text = 1;
+  string document_type = 2;
+  string extracted_payload = 3;
+}
+
+message StoreExtractionResponse {
+  bool success = 1;
+}
