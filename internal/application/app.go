@@ -5,9 +5,15 @@ import (
 	"crypto/sha256"
 	"encoding/hex"
 	"fmt"
+	"math/rand"
+	"time"
 
 	"github.com/doc_processor/semantic_cache_service/internal/domain"
 )
+
+func init() {
+	rand.Seed(time.Now().UnixNano())
+}
 
 // SemanticCacheApp coordinates the semantic cache use cases.
 type SemanticCacheApp struct {
@@ -25,6 +31,7 @@ func NewSemanticCacheApp(embedder domain.EmbeddingService, store domain.VectorSt
 
 // CheckCache processes the Check Cache use case.
 func (a *SemanticCacheApp) CheckCache(ctx context.Context, text string, metadata map[string]string, threshold float32) (hit bool, extractedPayload string, confidence float32, err error) {
+
 	vector, err := a.embedder.Generate(ctx, text)
 	if err != nil {
 		return false, "", 0, fmt.Errorf("action failed for job CheckCache: embedding generation error: %w", err)
