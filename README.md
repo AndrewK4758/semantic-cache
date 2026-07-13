@@ -33,7 +33,7 @@ cd /home/ak/projects/doc_processor_service/semantic_cache_service
 export GRPC_PORT=50053
 export QDRANT_ADDR=localhost:6334
 export OLLAMA_URL=http://localhost:11434
-export OLLAMA_MODEL=nomic-embed-text
+export OLLAMA_MODEL=all-minilm:l6-v2
 export QDRANT_COLLECTION=semantic_cache
 
 go run cmd/server/main.go
