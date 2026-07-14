@@ -7,7 +7,7 @@ This service is engineered strictly adhering to **Clean Architecture**, complete
 ## 🏗 Architecture Layers
 
 - **Domain:** Defines the core `EmbeddingService` and `VectorStore` abstractions. Zero external dependencies.
-- **Application:** Wires the interfaces together to implement `CheckCache` and `StoreExtraction` use cases. Enforces the similarity thresholds mathematically.
+- **Application:** Wires the interfaces together to implement `CheckCache`, `StoreExtraction`, and `SeedCache` use cases. Enforces the similarity thresholds mathematically.
 - **Infrastructure:**
   - `qdrant`: Implements `VectorStore` via gRPC/REST Cosine Similarity search with strict metadata filtering.
   - `openai`: Implements `EmbeddingService` via HTTP POST to an OpenAI-compatible `/v1/embeddings` endpoint.
