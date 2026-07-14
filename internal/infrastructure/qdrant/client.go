@@ -40,28 +40,30 @@ func (c *Client) Close() {
 }
 
 // Search implements the domain.VectorStore interface.
-func (c *Client) Search(ctx context.Context, vector []float32, metadata map[string]string, limit int) ([]domain.SearchResult, error) {
-	collectionName := c.defaultCollection
-	if col, ok := metadata["qdrant_collection"]; ok && col != "" {
-		collectionName = col
-		delete(metadata, "qdrant_collection")
+func (c *Client) Search(ctx context.Context, collectionName string, vector []float32, metadata map[string]interface{}, limit int) ([]domain.SearchResult, error) {
+	if collectionName == "" {
+		collectionName = c.defaultCollection
 	}
 
 	// Construct the metadata filters
 	var conditions []*pb.Condition
 	for k, v := range metadata {
-		conditions = append(conditions, &pb.Condition{
-			ConditionOneOf: &pb.Condition_Field{
-				Field: &pb.FieldCondition{
-					Key: k,
-					Match: &pb.Match{
-						MatchValue: &pb.Match_Keyword{
-							Keyword: v,
+		if strVal, ok := v.(string); ok {
+			conditions = append(conditions, &pb.Condition{
+				ConditionOneOf: &pb.Condition_Field{
+					Field: &pb.FieldCondition{
+						Key: k,
+						Match: &pb.Match{
+							MatchValue: &pb.Match_Keyword{
+								Keyword: strVal,
+							},
 						},
 					},
 				},
-			},
-		})
+			})
+		}
+		// In a real application, you'd map arrays or other JSON types into Qdrant Conditions.
+		// For simplicity, we just handle strings, since that covers our immediate use case.
 	}
 
 	filter := &pb.Filter{
@@ -92,10 +94,10 @@ func (c *Client) Search(ctx context.Context, vector []float32, metadata map[stri
 			payloadStr = payloadVal.GetStringValue()
 		}
 
-		metadata := make(map[string]string)
+		resultMetadata := make(map[string]interface{})
 		for k, v := range point.Payload {
 			if k != "json_payload" {
-				metadata[k] = v.GetStringValue()
+				resultMetadata[k] = v.GetStringValue() // we can decode other types from qdrant if needed
 			}
 		}
 
@@ -110,7 +112,7 @@ func (c *Client) Search(ctx context.Context, vector []float32, metadata map[stri
 		results = append(results, domain.SearchResult{
 			Record: domain.CacheRecord{
 				ID:          idStr,
-				Metadata:    metadata,
+				Metadata:    resultMetadata,
 				Vector:      vector,
 				JSONPayload: payloadStr,
 			},
@@ -122,16 +124,10 @@ func (c *Client) Search(ctx context.Context, vector []float32, metadata map[stri
 }
 
 // Upsert implements the domain.VectorStore interface.
-func (c *Client) Upsert(ctx context.Context, record domain.CacheRecord) error {
-	collectionName := c.defaultCollection
-	if col, ok := record.Metadata["qdrant_collection"]; ok && col != "" {
-		collectionName = col
-		delete(record.Metadata, "qdrant_collection")
+func (c *Client) Upsert(ctx context.Context, collectionName string, record domain.CacheRecord) error {
+	if collectionName == "" {
+		collectionName = c.defaultCollection
 	}
-
-	// We need a UUID for Qdrant. The ID generated in application layer is a hex string (sha256).
-	// To make it a valid UUID, we can format the first 32 hex chars as a UUID (8-4-4-4-12) or use string ID.
-	// Since Qdrant supports UUIDs specifically, we'll format the hex hash as a UUID.
 
 	// Create UUID string from hex: 8-4-4-4-12
 	if len(record.ID) >= 32 {
@@ -152,8 +148,10 @@ func (c *Client) Upsert(ctx context.Context, record domain.CacheRecord) error {
 	}
 
 	for k, v := range record.Metadata {
-		payload[k] = &pb.Value{
-			Kind: &pb.Value_StringValue{StringValue: v},
+		if strVal, ok := v.(string); ok {
+			payload[k] = &pb.Value{
+				Kind: &pb.Value_StringValue{StringValue: strVal},
+			}
 		}
 	}
 

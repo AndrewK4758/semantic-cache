@@ -24,9 +24,14 @@ func NewSemanticCacheHandler(app *application.SemanticCacheApp) *SemanticCacheHa
 
 // CheckCache handles the CheckCache gRPC request.
 func (h *SemanticCacheHandler) CheckCache(ctx context.Context, req *pb.CheckCacheRequest) (*pb.CheckCacheResponse, error) {
-	log.Printf("INFO: [gRPC] Received CheckCache request. Metadata count: %d", len(req.Metadata))
+	log.Printf("INFO: [gRPC] Received CheckCache request. Collection: %s", req.CollectionName)
 	
-	hit, payload, confidence, err := h.app.CheckCache(ctx, req.Text, req.Metadata, req.Threshold)
+	var metadata map[string]interface{}
+	if req.Metadata != nil {
+		metadata = req.Metadata.AsMap()
+	}
+
+	hit, payload, confidence, err := h.app.CheckCache(ctx, req.CollectionName, req.Text, metadata, req.Threshold)
 	if err != nil {
 		log.Printf("ERROR: [gRPC] CheckCache failed: %v", err)
 		return nil, fmt.Errorf("application layer CheckCache failed: %w", err)
@@ -42,9 +47,14 @@ func (h *SemanticCacheHandler) CheckCache(ctx context.Context, req *pb.CheckCach
 
 // StoreExtraction handles the StoreExtraction gRPC request.
 func (h *SemanticCacheHandler) StoreExtraction(ctx context.Context, req *pb.StoreExtractionRequest) (*pb.StoreExtractionResponse, error) {
-	log.Printf("INFO: [gRPC] Received StoreExtraction request. Metadata count: %d", len(req.Metadata))
+	log.Printf("INFO: [gRPC] Received StoreExtraction request. Collection: %s", req.CollectionName)
 
-	err := h.app.StoreExtraction(ctx, req.Text, req.Metadata, req.ExtractedPayload)
+	var metadata map[string]interface{}
+	if req.Metadata != nil {
+		metadata = req.Metadata.AsMap()
+	}
+
+	err := h.app.StoreExtraction(ctx, req.CollectionName, req.Text, metadata, req.ExtractedPayload)
 	if err != nil {
 		log.Printf("ERROR: [gRPC] StoreExtraction failed: %v", err)
 		return &pb.StoreExtractionResponse{Success: false}, fmt.Errorf("application layer StoreExtraction failed: %w", err)
@@ -56,10 +66,15 @@ func (h *SemanticCacheHandler) StoreExtraction(ctx context.Context, req *pb.Stor
 
 // SeedCache handles the SeedCache gRPC request.
 func (h *SemanticCacheHandler) SeedCache(ctx context.Context, req *pb.SeedCacheRequest) (*pb.SeedCacheResponse, error) {
-	log.Printf("INFO: [gRPC] Received SeedCache request. Metadata count: %d", len(req.Metadata))
+	log.Printf("INFO: [gRPC] Received SeedCache request. Collection: %s", req.CollectionName)
+
+	var metadata map[string]interface{}
+	if req.Metadata != nil {
+		metadata = req.Metadata.AsMap()
+	}
 
 	// Seeding uses the exact same underlying logic as storing an extraction
-	err := h.app.StoreExtraction(ctx, req.TemplateText, req.Metadata, req.ExtractedPayload)
+	err := h.app.StoreExtraction(ctx, req.CollectionName, req.TemplateText, metadata, req.ExtractedPayload)
 	if err != nil {
 		log.Printf("ERROR: [gRPC] SeedCache failed: %v", err)
 		return &pb.SeedCacheResponse{Success: false, Message: err.Error()}, fmt.Errorf("application layer StoreExtraction for seeding failed: %w", err)

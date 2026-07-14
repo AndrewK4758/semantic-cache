@@ -9,6 +9,6 @@ type EmbeddingService interface {
 
 // VectorStore persists and searches semantic embeddings.
 type VectorStore interface {
-	Search(ctx context.Context, vector []float32, metadata map[string]string, limit int) ([]SearchResult, error)
-	Upsert(ctx context.Context, record CacheRecord) error
+	Search(ctx context.Context, collectionName string, vector []float32, metadata map[string]interface{}, limit int) ([]SearchResult, error)
+	Upsert(ctx context.Context, collectionName string, record CacheRecord) error
 }
