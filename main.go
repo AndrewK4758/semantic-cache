@@ -11,7 +11,7 @@ import (
 	"github.com/doc_processor/semantic_cache_service/internal/application"
 	"github.com/doc_processor/semantic_cache_service/internal/infrastructure/openai"
 	"github.com/doc_processor/semantic_cache_service/internal/infrastructure/qdrant"
-	grpc_handler "github.com/doc_processor/semantic_cache_service/internal/presentation/grpc"
+	grpchandler "github.com/doc_processor/semantic_cache_service/internal/presentation/grpc"
 	"github.com/joho/godotenv"
 
 	"google.golang.org/grpc"
@@ -27,7 +27,7 @@ func main() {
 	qdrantAddr := getEnv("QDRANT_URL", "localhost:6334")
 	openaiURL := getEnv("OPENAI_BASE_URL", "http://localhost:11434/v1")
 	openaiModel := getEnv("OPENAI_EMBEDDING_MODEL", "all-minilm:latest")
-	collectionName := getEnv("QDRANT_COLLECTION", "document_chunks")
+	collectionName := getEnv("QDRANT_COLLECTION", "incoming_email_templates")
 
 	// Infrastructure
 	openaiClient := openai.NewClient(openaiURL, openaiModel)
@@ -42,7 +42,7 @@ func main() {
 	app := application.NewSemanticCacheApp(openaiClient, qdrantClient)
 
 	// Presentation
-	handler := grpc_handler.NewSemanticCacheHandler(app)
+	handler := grpchandler.NewSemanticCacheHandler(app)
 
 	// gRPC Server Setup
 	lis, err := net.Listen("tcp", ":"+grpcPort)

@@ -12,7 +12,7 @@ import (
 
 type Client struct {
 	qdrantClient pb.PointsClient
-	collection   string
+	defaultCollection string
 	conn         *grpc.ClientConn
 }
 
@@ -26,9 +26,9 @@ func NewClient(addr string, collection string) (*Client, error) {
 	client := pb.NewPointsClient(conn)
 
 	return &Client{
-		qdrantClient: client,
-		collection:   collection,
-		conn:         conn,
+		qdrantClient:      client,
+		defaultCollection: collection,
+		conn:              conn,
 	}, nil
 }
 
@@ -41,6 +41,12 @@ func (c *Client) Close() {
 
 // Search implements the domain.VectorStore interface.
 func (c *Client) Search(ctx context.Context, vector []float32, metadata map[string]string, limit int) ([]domain.SearchResult, error) {
+	collectionName := c.defaultCollection
+	if col, ok := metadata["qdrant_collection"]; ok && col != "" {
+		collectionName = col
+		delete(metadata, "qdrant_collection")
+	}
+
 	// Construct the metadata filters
 	var conditions []*pb.Condition
 	for k, v := range metadata {
@@ -63,7 +69,7 @@ func (c *Client) Search(ctx context.Context, vector []float32, metadata map[stri
 	}
 
 	req := &pb.SearchPoints{
-		CollectionName: c.collection,
+		CollectionName: collectionName,
 		Vector:         vector,
 		Filter:         filter,
 		Limit:          uint64(limit),
@@ -117,6 +123,12 @@ func (c *Client) Search(ctx context.Context, vector []float32, metadata map[stri
 
 // Upsert implements the domain.VectorStore interface.
 func (c *Client) Upsert(ctx context.Context, record domain.CacheRecord) error {
+	collectionName := c.defaultCollection
+	if col, ok := record.Metadata["qdrant_collection"]; ok && col != "" {
+		collectionName = col
+		delete(record.Metadata, "qdrant_collection")
+	}
+
 	// We need a UUID for Qdrant. The ID generated in application layer is a hex string (sha256).
 	// To make it a valid UUID, we can format the first 32 hex chars as a UUID (8-4-4-4-12) or use string ID.
 	// Since Qdrant supports UUIDs specifically, we'll format the hex hash as a UUID.
@@ -146,7 +158,7 @@ func (c *Client) Upsert(ctx context.Context, record domain.CacheRecord) error {
 	}
 
 	req := &pb.UpsertPoints{
-		CollectionName: c.collection,
+		CollectionName: collectionName,
 		Points: []*pb.PointStruct{
 			{
 				Id: pointId,
