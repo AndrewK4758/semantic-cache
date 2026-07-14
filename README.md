@@ -11,7 +11,9 @@ This service is engineered strictly adhering to **Clean Architecture**, complete
 - **Infrastructure:**
   - `qdrant`: Implements `VectorStore` via gRPC/REST Cosine Similarity search with strict metadata filtering.
   - `openai`: Implements `EmbeddingService` via HTTP POST to an OpenAI-compatible `/v1/embeddings` endpoint.
-- **Presentation:** Exposes the Application layer to the Orchestrator via gRPC (`SemanticCacheService`).
+- **Presentation:** Uses a **Hybrid Architecture**:
+  - `gRPC` (`SemanticCacheService`): Synchronous API for high-speed `CheckCache` reads.
+  - `NATS JetStream` (`JetStreamHandler`): Asynchronous, durable fire-and-forget message consumer for indexing writes (`cache.requests.store`).
 
 ## 🚀 Running the Semantic Cache Service
 

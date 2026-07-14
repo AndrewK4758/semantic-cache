@@ -1,6 +1,7 @@
 package main
 
 import (
+	"context"
 	"log"
 	"net"
 	"os"
@@ -11,6 +12,7 @@ import (
 	"github.com/doc_processor/semantic_cache_service/internal/application"
 	"github.com/doc_processor/semantic_cache_service/internal/infrastructure/openai"
 	"github.com/doc_processor/semantic_cache_service/internal/infrastructure/qdrant"
+	"github.com/doc_processor/semantic_cache_service/internal/messaging"
 	grpchandler "github.com/doc_processor/semantic_cache_service/internal/presentation/grpc"
 	"github.com/joho/godotenv"
 
@@ -41,8 +43,20 @@ func main() {
 	// Application
 	app := application.NewSemanticCacheApp(openaiClient, qdrantClient)
 
-	// Presentation
+	// Presentation (gRPC)
 	handler := grpchandler.NewSemanticCacheHandler(app)
+
+	// Messaging (JetStream)
+	natsURL := getEnv("NATS_URL", "nats://localhost:4222")
+	jsHandler, err := messaging.NewJetStreamHandler(natsURL, app)
+	if err != nil {
+		log.Fatalf("Failed to initialize JetStream handler: %v", err)
+	}
+	defer jsHandler.Close()
+
+	if err := jsHandler.StartConsumers(context.Background()); err != nil {
+		log.Fatalf("Failed to start JetStream consumers: %v", err)
+	}
 
 	// gRPC Server Setup
 	lis, err := net.Listen("tcp", ":"+grpcPort)
