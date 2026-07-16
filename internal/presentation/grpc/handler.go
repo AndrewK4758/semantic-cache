@@ -83,3 +83,22 @@ func (h *SemanticCacheHandler) SeedCache(ctx context.Context, req *pb.SeedCacheR
 	log.Printf("INFO: [gRPC] SeedCache successful.")
 	return &pb.SeedCacheResponse{Success: true, Message: "Successfully seeded cache"}, nil
 }
+
+// CheckMetadataExists handles the CheckMetadataExists gRPC request.
+func (h *SemanticCacheHandler) CheckMetadataExists(ctx context.Context, req *pb.CheckMetadataRequest) (*pb.CheckMetadataResponse, error) {
+	log.Printf("INFO: [gRPC] Received CheckMetadataExists request. Collection: %s", req.CollectionName)
+
+	var metadata map[string]interface{}
+	if req.MetadataFilter != nil {
+		metadata = req.MetadataFilter.AsMap()
+	}
+
+	exists, err := h.app.CheckMetadata(ctx, req.CollectionName, metadata)
+	if err != nil {
+		log.Printf("ERROR: [gRPC] CheckMetadataExists failed: %v", err)
+		return nil, fmt.Errorf("application layer CheckMetadata failed: %w", err)
+	}
+
+	log.Printf("INFO: [gRPC] CheckMetadataExists successful.")
+	return &pb.CheckMetadataResponse{Exists: exists}, nil
+}

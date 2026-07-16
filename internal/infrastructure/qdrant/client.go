@@ -184,5 +184,65 @@ func (c *Client) Upsert(ctx context.Context, collectionName string, record domai
 	return nil
 }
 
+// CheckMetadata implements the domain.VectorStore interface.
+func (c *Client) CheckMetadata(ctx context.Context, collectionName string, metadata map[string]interface{}) (bool, error) {
+	if collectionName == "" {
+		collectionName = c.defaultCollection
+	}
+
+	var conditions []*pb.Condition
+	for k, v := range metadata {
+		if strVal, ok := v.(string); ok {
+			conditions = append(conditions, &pb.Condition{
+				ConditionOneOf: &pb.Condition_Field{
+					Field: &pb.FieldCondition{
+						Key: k,
+						Match: &pb.Match{
+							MatchValue: &pb.Match_Keyword{
+								Keyword: strVal,
+							},
+						},
+					},
+				},
+			})
+		}
+	}
+
+	if len(conditions) == 0 {
+		return false, fmt.Errorf("no valid metadata provided for CheckMetadata")
+	}
+
+	filter := &pb.Filter{
+		Must: conditions,
+	}
+
+	req := &pb.ScrollPoints{
+		CollectionName: collectionName,
+		Filter:         filter,
+		Limit:          func() *uint32 { v := uint32(1); return &v }(),
+		WithPayload: &pb.WithPayloadSelector{
+			SelectorOptions: &pb.WithPayloadSelector_Enable{
+				Enable: false,
+			},
+		},
+		WithVectors: &pb.WithVectorsSelector{
+			SelectorOptions: &pb.WithVectorsSelector_Enable{
+				Enable: false,
+			},
+		},
+	}
+
+	resp, err := c.qdrantClient.Scroll(ctx, req)
+	if err != nil {
+		return false, fmt.Errorf("action failed for job QdrantScroll: grpc call failed: %w", err)
+	}
+
+	if len(resp.Result) > 0 {
+		return true, nil
+	}
+
+	return false, nil
+}
+
 // compile-time check to ensure Client implements domain.VectorStore
 var _ domain.VectorStore = (*Client)(nil)

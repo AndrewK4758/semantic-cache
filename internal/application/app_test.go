@@ -23,22 +23,30 @@ func (m *mockEmbeddingService) Generate(ctx context.Context, text string) ([]flo
 }
 
 type mockVectorStore struct {
-	searchFn func(ctx context.Context, vector []float32, metadata map[string]string, limit int) ([]domain.SearchResult, error)
-	upsertFn func(ctx context.Context, record domain.CacheRecord) error
+	searchFn        func(ctx context.Context, collectionName string, vector []float32, metadata map[string]interface{}, limit int) ([]domain.SearchResult, error)
+	upsertFn        func(ctx context.Context, collectionName string, record domain.CacheRecord) error
+	checkMetadataFn func(ctx context.Context, collectionName string, metadata map[string]interface{}) (bool, error)
 }
 
-func (m *mockVectorStore) Search(ctx context.Context, vector []float32, metadata map[string]string, limit int) ([]domain.SearchResult, error) {
+func (m *mockVectorStore) Search(ctx context.Context, collectionName string, vector []float32, metadata map[string]interface{}, limit int) ([]domain.SearchResult, error) {
 	if m.searchFn != nil {
-		return m.searchFn(ctx, vector, metadata, limit)
+		return m.searchFn(ctx, collectionName, vector, metadata, limit)
 	}
 	return nil, nil
 }
 
-func (m *mockVectorStore) Upsert(ctx context.Context, record domain.CacheRecord) error {
+func (m *mockVectorStore) Upsert(ctx context.Context, collectionName string, record domain.CacheRecord) error {
 	if m.upsertFn != nil {
-		return m.upsertFn(ctx, record)
+		return m.upsertFn(ctx, collectionName, record)
 	}
 	return nil
+}
+
+func (m *mockVectorStore) CheckMetadata(ctx context.Context, collectionName string, metadata map[string]interface{}) (bool, error) {
+	if m.checkMetadataFn != nil {
+		return m.checkMetadataFn(ctx, collectionName, metadata)
+	}
+	return false, nil
 }
 
 // --- Tests ---
@@ -46,13 +54,13 @@ func (m *mockVectorStore) Upsert(ctx context.Context, record domain.CacheRecord)
 func TestSemanticCacheApp_CheckCache(t *testing.T) {
 	type args struct {
 		text      string
-		metadata  map[string]string
+		metadata  map[string]interface{}
 		threshold float32
 	}
 	tests := []struct {
 		name               string
 		embedFn            func(ctx context.Context, text string) ([]float32, error)
-		searchFn           func(ctx context.Context, vector []float32, metadata map[string]string, limit int) ([]domain.SearchResult, error)
+		searchFn           func(ctx context.Context, collectionName string, vector []float32, metadata map[string]interface{}, limit int) ([]domain.SearchResult, error)
 		args               args
 		expectedHit        bool
 		expectedPayload    string
@@ -61,7 +69,7 @@ func TestSemanticCacheApp_CheckCache(t *testing.T) {
 	}{
 		{
 			name: "Cache Hit - Score exceeds threshold",
-			searchFn: func(ctx context.Context, vector []float32, metadata map[string]string, limit int) ([]domain.SearchResult, error) {
+			searchFn: func(ctx context.Context, collectionName string, vector []float32, metadata map[string]interface{}, limit int) ([]domain.SearchResult, error) {
 				return []domain.SearchResult{
 					{
 						Score: 0.95,
@@ -73,7 +81,7 @@ func TestSemanticCacheApp_CheckCache(t *testing.T) {
 			},
 			args: args{
 				text:      "sample invoice text",
-				metadata:  map[string]string{"document_type": "invoice"},
+				metadata:  map[string]interface{}{"document_type": "invoice"},
 				threshold: 0.90,
 			},
 			expectedHit:        true,
@@ -83,7 +91,7 @@ func TestSemanticCacheApp_CheckCache(t *testing.T) {
 		},
 		{
 			name: "Cache Miss - Score below threshold",
-			searchFn: func(ctx context.Context, vector []float32, metadata map[string]string, limit int) ([]domain.SearchResult, error) {
+			searchFn: func(ctx context.Context, collectionName string, vector []float32, metadata map[string]interface{}, limit int) ([]domain.SearchResult, error) {
 				return []domain.SearchResult{
 					{
 						Score: 0.85,
@@ -95,7 +103,7 @@ func TestSemanticCacheApp_CheckCache(t *testing.T) {
 			},
 			args: args{
 				text:      "sample text",
-				metadata:  map[string]string{"document_type": "invoice"},
+				metadata:  map[string]interface{}{"document_type": "invoice"},
 				threshold: 0.90,
 			},
 			expectedHit:        false,
@@ -104,13 +112,13 @@ func TestSemanticCacheApp_CheckCache(t *testing.T) {
 			expectError:        false,
 		},
 		{
-			name: "Cache Miss - No results",
-			searchFn: func(ctx context.Context, vector []float32, metadata map[string]string, limit int) ([]domain.SearchResult, error) {
+			name: "Success - Cache Miss (No Results)",
+			searchFn: func(ctx context.Context, collectionName string, vector []float32, metadata map[string]interface{}, limit int) ([]domain.SearchResult, error) {
 				return []domain.SearchResult{}, nil
 			},
 			args: args{
 				text:      "sample text",
-				metadata:  map[string]string{"document_type": "invoice"},
+				metadata:  map[string]interface{}{"document_type": "invoice"},
 				threshold: 0.90,
 			},
 			expectedHit:        false,
@@ -125,19 +133,19 @@ func TestSemanticCacheApp_CheckCache(t *testing.T) {
 			},
 			args: args{
 				text:      "sample invoice text",
-				metadata:  map[string]string{"document_type": "invoice"},
+				metadata:  map[string]interface{}{"document_type": "invoice"},
 				threshold: 0.8,
 			},
 			expectError: true,
 		},
 		{
-			name: "Error - Vector search failure",
-			searchFn: func(ctx context.Context, vector []float32, metadata map[string]string, limit int) ([]domain.SearchResult, error) {
-				return nil, errors.New("qdrant timeout")
+			name: "Error - Store search failure",
+			searchFn: func(ctx context.Context, collectionName string, vector []float32, metadata map[string]interface{}, limit int) ([]domain.SearchResult, error) {
+				return nil, errors.New("qdrant offline")
 			},
 			args: args{
 				text:      "sample text",
-				metadata:  map[string]string{"document_type": "invoice"},
+				metadata:  map[string]interface{}{"document_type": "invoice"},
 				threshold: 0.90,
 			},
 			expectError: true,
@@ -150,7 +158,7 @@ func TestSemanticCacheApp_CheckCache(t *testing.T) {
 			storeMock := &mockVectorStore{searchFn: tt.searchFn}
 			app := application.NewSemanticCacheApp(embedMock, storeMock)
 
-			hit, payload, conf, err := app.CheckCache(context.Background(), tt.args.text, tt.args.metadata, tt.args.threshold)
+			hit, payload, conf, err := app.CheckCache(context.Background(), "test_collection", tt.args.text, tt.args.metadata, tt.args.threshold)
 
 			if (err != nil) != tt.expectError {
 				t.Fatalf("expected error: %v, got: %v", tt.expectError, err)
@@ -174,13 +182,13 @@ func TestSemanticCacheApp_CheckCache(t *testing.T) {
 func TestSemanticCacheApp_StoreExtraction(t *testing.T) {
 	type args struct {
 		text             string
-		metadata         map[string]string
+		metadata         map[string]interface{}
 		extractedPayload string
 	}
 	tests := []struct {
 		name        string
 		embedFn     func(ctx context.Context, text string) ([]float32, error)
-		upsertFn    func(ctx context.Context, record domain.CacheRecord) error
+		upsertFn    func(ctx context.Context, collectionName string, record domain.CacheRecord) error
 		args        args
 		expectError bool
 	}{
@@ -188,7 +196,7 @@ func TestSemanticCacheApp_StoreExtraction(t *testing.T) {
 			name: "Success",
 			args: args{
 				text:             "sample invoice text",
-				metadata:         map[string]string{"document_type": "invoice"},
+				metadata:         map[string]interface{}{"document_type": "invoice"},
 				extractedPayload: `{"amount": 100}`,
 			},
 			expectError: false,
@@ -200,19 +208,19 @@ func TestSemanticCacheApp_StoreExtraction(t *testing.T) {
 			},
 			args: args{
 				text:             "sample invoice text",
-				metadata:         map[string]string{"document_type": "invoice"},
+				metadata:         map[string]interface{}{"document_type": "invoice"},
 				extractedPayload: `{"amount": 100}`,
 			},
 			expectError: true,
 		},
 		{
 			name: "Error - Upsert failure",
-			upsertFn: func(ctx context.Context, record domain.CacheRecord) error {
+			upsertFn: func(ctx context.Context, collectionName string, record domain.CacheRecord) error {
 				return errors.New("qdrant offline")
 			},
 			args: args{
 				text:             "sample invoice text",
-				metadata:         map[string]string{"document_type": "invoice"},
+				metadata:         map[string]interface{}{"document_type": "invoice"},
 				extractedPayload: `{"amount": 100}`,
 			},
 			expectError: true,
@@ -224,10 +232,78 @@ func TestSemanticCacheApp_StoreExtraction(t *testing.T) {
 			embedMock := &mockEmbeddingService{generateFn: tt.embedFn}
 			storeMock := &mockVectorStore{upsertFn: tt.upsertFn}
 			app := application.NewSemanticCacheApp(embedMock, storeMock)
-			err := app.StoreExtraction(context.Background(), tt.args.text, tt.args.metadata, tt.args.extractedPayload)
+			err := app.StoreExtraction(context.Background(), "test_collection", tt.args.text, tt.args.metadata, tt.args.extractedPayload)
 
 			if (err != nil) != tt.expectError {
 				t.Fatalf("expected error: %v, got: %v", tt.expectError, err)
+			}
+		})
+	}
+}
+
+func TestSemanticCacheApp_CheckMetadata(t *testing.T) {
+	type args struct {
+		collectionName string
+		metadata       map[string]interface{}
+	}
+	tests := []struct {
+		name            string
+		checkMetadataFn func(ctx context.Context, collectionName string, metadata map[string]interface{}) (bool, error)
+		args            args
+		expectedExists  bool
+		expectError     bool
+	}{
+		{
+			name: "Success - Metadata Exists",
+			checkMetadataFn: func(ctx context.Context, collectionName string, metadata map[string]interface{}) (bool, error) {
+				return true, nil
+			},
+			args: args{
+				collectionName: "test_collection",
+				metadata:       map[string]interface{}{"TemplateHash": "testhash123"},
+			},
+			expectedExists: true,
+			expectError:    false,
+		},
+		{
+			name: "Success - Metadata Does Not Exist",
+			checkMetadataFn: func(ctx context.Context, collectionName string, metadata map[string]interface{}) (bool, error) {
+				return false, nil
+			},
+			args: args{
+				collectionName: "test_collection",
+				metadata:       map[string]interface{}{"TemplateHash": "unknownhash"},
+			},
+			expectedExists: false,
+			expectError:    false,
+		},
+		{
+			name: "Error - Vector Store Offline",
+			checkMetadataFn: func(ctx context.Context, collectionName string, metadata map[string]interface{}) (bool, error) {
+				return false, errors.New("qdrant offline")
+			},
+			args: args{
+				collectionName: "test_collection",
+				metadata:       map[string]interface{}{"TemplateHash": "testhash123"},
+			},
+			expectedExists: false,
+			expectError:    true,
+		},
+	}
+
+	for _, tt := range tests {
+		t.Run(tt.name, func(t *testing.T) {
+			storeMock := &mockVectorStore{checkMetadataFn: tt.checkMetadataFn}
+			app := application.NewSemanticCacheApp(&mockEmbeddingService{}, storeMock)
+
+			exists, err := app.CheckMetadata(context.Background(), tt.args.collectionName, tt.args.metadata)
+
+			if (err != nil) != tt.expectError {
+				t.Fatalf("expected error: %v, got: %v", tt.expectError, err)
+			}
+
+			if exists != tt.expectedExists {
+				t.Errorf("expected exists: %v, got: %v", tt.expectedExists, exists)
 			}
 		})
 	}

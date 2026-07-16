@@ -13,9 +13,9 @@ import (
 )
 
 type SeedItem struct {
-	SubjectClass   string
-	Classification string
-	Template       string
+	Collection  string `json:"collection"`
+	JsonPayload string `json:"json_payload"`
+	SubjectClass string `json:"subject_class"`
 }
 
 func main() {
@@ -29,162 +29,24 @@ func main() {
 
 	items := []SeedItem{
 		{
-			SubjectClass:   "Attorney Service Ordered",
-			Classification: "Title_Opinion",
-			Template: `Subject:
-
-Due Date & Time:
-Attorney Service Ordered by Rocket Close
-Attorney Opinion - Refinance
-Service Information
-Attorney Opinion - Refinance:
-Instructions:
-Order Information
-Order #:
-Order Date:
-Order Type:
-Transaction Type:
-Purchase Price:
-Primary Loan #:
-Primary Loan Type:
-Primary Loan Description:
-Primary Loan Amount:
-Primary Proposed Insured Lender:
-Property Address:
-Property County:
-Property Tax Ids:
-Brief Legal:
-Borrower - 
-Mobile:
-Middle Initial:
-Is Married:
-DOB:
-SSN:
-Borrower - 
-Mobile:
-Middle Initial:
-Is Married:
-DOB:
-SSN:
-Return Completed Orders using the Rocket Close Website or send to:
-Rocket Close, LLC
-662 Woodward Avenue, Detroit, MI 48226
-Email:
-Fax:
-Phone:`,
+			Collection:   "incoming_email_templates",
+			JsonPayload:  `{"classification": "Title_Opinion"}`,
+			SubjectClass: "Attorney Service Ordered",
 		},
 		{
-			SubjectClass:   "Closing Service Ordered",
-			Classification: "Closing",
-			Template: `Subject:
-
-Closing Services Ordered by Rocket Close
-Closing Information
-Scheduled Closing Date and Time:
-Closing Location:
-Language:
-Vendor Information
-Number:
-Name:
-Address:
-Phone:
-Fax:
-Email:
-Service Information
-Attorney Hybrid Refinance Signing:
-Hybrid Online Documents:
-Client:
-Closing Loan #:
-Instructions:
-Order Information
-Order #:
-Order Date:
-Order Type:
-Transaction Type:
-Purchase Price:
-Primary Loan #:
-Primary Loan Type:
-Primary Loan Description:
-Primary Loan Amount:
-Primary Proposed Insured Lender:
-Property Address:
-Property County:
-Borrower - 
-Mobile:
-Borrower - 
-Mobile:`,
+			Collection:   "incoming_email_templates",
+			JsonPayload:  `{"classification": "Closing"}`,
+			SubjectClass: "Closing Service Ordered",
 		},
 		{
-			SubjectClass:   "Deed Service Updated",
-			Classification: "Deed",
-			Template: `Subject:
- 
-Deed Service Updated by Rocket Close
-Deed - Correction Affidavit
-Service Information
-Deed - Correction Affidavit:
-Property Address:
-Property County:
-Vesting Type:
-Grantor / Seller:
-Grantee / Buyer:
-Instructions:
-Order Information
-Order #:
-Order Date:
-Order Type:
-Transaction Type:
-Purchase Price:
-Primary Loan #:
-Primary Loan Type:
-Primary Loan Description:
-Primary Loan Amount:
-Primary Proposed Insured Lender:
-Property Address:
-Property County:
-Borrower - 
-Home:
-Work:
-Middle Initial:
-Is Married:
-DOB:
-SSN:`,
+			Collection:   "incoming_email_templates",
+			JsonPayload:  `{"classification": "Deed"}`,
+			SubjectClass: "Deed Service Updated",
 		},
 		{
-			SubjectClass:   "Deed Service Ordered",
-			Classification: "Deed",
-			Template: `Subject:
- 
-Deed Service Ordered by Rocket Close
-Deed - Warranty Deed-Standard-Purchase
-Service Information
-Deed - Warranty Deed-Standard-Purchase:
-Property Address:
-Property County:
-Vesting Type:
-Grantor / Seller:
-Grantee / Buyer:
-Instructions:
-Order Information
-Order #:
-Order Date:
-Order Type:
-Transaction Type:
-Purchase Price:
-Primary Loan #:
-Primary Loan Type:
-Primary Loan Description:
-Primary Loan Amount:
-Primary Proposed Insured Lender:
-Property Address:
-Property County:
-Brief Legal:
-Borrower - 
-Home:
-Mobile:
-Middle Initial:
-Is Married:
-SSN:`,
+			Collection:   "incoming_email_templates",
+			JsonPayload:  `{"classification": "Deed"}`,
+			SubjectClass: "Deed Service Ordered",
 		},
 	}
 
@@ -195,10 +57,10 @@ SSN:`,
 		})
 
 		req := &pb.SeedCacheRequest{
-			CollectionName:   "incoming_email_templates",
-			TemplateText:     item.Template,
+			CollectionName:   item.Collection,
+			TemplateText:     item.SubjectClass, // CRITICAL: Embed the subject string, not a full template body
 			Metadata:         metadataStruct,
-			ExtractedPayload: `{"classification": "` + item.Classification + `"}`,
+			ExtractedPayload: item.JsonPayload,
 		}
 		
 		res, err := client.SeedCache(ctx, req)

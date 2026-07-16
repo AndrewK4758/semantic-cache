@@ -94,3 +94,17 @@ func (a *SemanticCacheApp) StoreExtraction(ctx context.Context, collectionName s
 	log.Printf("INFO: [SemanticCacheApp] Successfully stored cache record.")
 	return nil
 }
+
+// CheckMetadata processes the pure metadata existence check use case.
+func (a *SemanticCacheApp) CheckMetadata(ctx context.Context, collectionName string, metadata map[string]interface{}) (bool, error) {
+	log.Printf("INFO: [SemanticCacheApp] CheckMetadata invoked. Collection: %s, Metadata fields: %d", collectionName, len(metadata))
+
+	exists, err := a.store.CheckMetadata(ctx, collectionName, metadata)
+	if err != nil {
+		log.Printf("ERROR: [SemanticCacheApp] Failed to check metadata: %v", err)
+		return false, fmt.Errorf("action failed for job CheckMetadata: vector store check error: %w", err)
+	}
+
+	log.Printf("INFO: [SemanticCacheApp] CheckMetadata successful. Exists: %v", exists)
+	return exists, nil
+}
