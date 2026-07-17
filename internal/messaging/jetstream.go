@@ -70,7 +70,7 @@ func (h *JetStreamHandler) StartConsumers(ctx context.Context) error {
 }
 
 func (h *JetStreamHandler) handleMessage(msg jetstream.Msg) {
-	ctx, cancel := context.WithTimeout(context.Background(), 10*time.Second)
+	ctx, cancel := context.WithTimeout(context.Background(), 60*time.Second)
 	defer cancel()
 
 	subject := msg.Subject()
@@ -83,7 +83,7 @@ func (h *JetStreamHandler) handleMessage(msg jetstream.Msg) {
 			return
 		}
 
-		metadata := make(map[string]interface{})
+		metadata := make(map[string]any)
 		if reqMsg.Request != nil && reqMsg.Request.Metadata != nil {
 			for k, v := range reqMsg.Request.Metadata.Fields {
 				metadata[k] = v.AsInterface()

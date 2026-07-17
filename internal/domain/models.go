@@ -3,7 +3,7 @@ package domain
 // CacheRecord represents a stored semantic embedding and its associated metadata/payload.
 type CacheRecord struct {
 	ID          string
-	Metadata    map[string]interface{}
+	Metadata    map[string]any
 	Vector      []float32
 	JSONPayload string
 }

@@ -13,8 +13,8 @@ import (
 )
 
 type SeedItem struct {
-	Collection  string `json:"collection"`
-	JsonPayload string `json:"json_payload"`
+	Collection   string `json:"collection"`
+	JsonPayload  string `json:"json_payload"`
 	SubjectClass string `json:"subject_class"`
 }
 
@@ -52,7 +52,7 @@ func main() {
 
 	for _, item := range items {
 		ctx, cancel := context.WithTimeout(context.Background(), 60*time.Second)
-		metadataStruct, _ := structpb.NewStruct(map[string]interface{}{
+		metadataStruct, _ := structpb.NewStruct(map[string]any{
 			"subject_class": item.SubjectClass,
 		})
 
@@ -62,7 +62,7 @@ func main() {
 			Metadata:         metadataStruct,
 			ExtractedPayload: item.JsonPayload,
 		}
-		
+
 		res, err := client.SeedCache(ctx, req)
 		if err != nil {
 			log.Printf("Failed to seed %s: %v", item.SubjectClass, err)

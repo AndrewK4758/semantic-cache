@@ -25,8 +25,8 @@ func NewSemanticCacheHandler(app *application.SemanticCacheApp) *SemanticCacheHa
 // CheckCache handles the CheckCache gRPC request.
 func (h *SemanticCacheHandler) CheckCache(ctx context.Context, req *pb.CheckCacheRequest) (*pb.CheckCacheResponse, error) {
 	log.Printf("INFO: [gRPC] Received CheckCache request. Collection: %s", req.CollectionName)
-	
-	var metadata map[string]interface{}
+
+	var metadata map[string]any
 	if req.Metadata != nil {
 		metadata = req.Metadata.AsMap()
 	}
@@ -49,7 +49,7 @@ func (h *SemanticCacheHandler) CheckCache(ctx context.Context, req *pb.CheckCach
 func (h *SemanticCacheHandler) StoreExtraction(ctx context.Context, req *pb.StoreExtractionRequest) (*pb.StoreExtractionResponse, error) {
 	log.Printf("INFO: [gRPC] Received StoreExtraction request. Collection: %s", req.CollectionName)
 
-	var metadata map[string]interface{}
+	var metadata map[string]any
 	if req.Metadata != nil {
 		metadata = req.Metadata.AsMap()
 	}
@@ -68,7 +68,7 @@ func (h *SemanticCacheHandler) StoreExtraction(ctx context.Context, req *pb.Stor
 func (h *SemanticCacheHandler) SeedCache(ctx context.Context, req *pb.SeedCacheRequest) (*pb.SeedCacheResponse, error) {
 	log.Printf("INFO: [gRPC] Received SeedCache request. Collection: %s", req.CollectionName)
 
-	var metadata map[string]interface{}
+	var metadata map[string]any
 	if req.Metadata != nil {
 		metadata = req.Metadata.AsMap()
 	}
@@ -88,7 +88,7 @@ func (h *SemanticCacheHandler) SeedCache(ctx context.Context, req *pb.SeedCacheR
 func (h *SemanticCacheHandler) CheckMetadataExists(ctx context.Context, req *pb.CheckMetadataRequest) (*pb.CheckMetadataResponse, error) {
 	log.Printf("INFO: [gRPC] Received CheckMetadataExists request. Collection: %s", req.CollectionName)
 
-	var metadata map[string]interface{}
+	var metadata map[string]any
 	if req.MetadataFilter != nil {
 		metadata = req.MetadataFilter.AsMap()
 	}

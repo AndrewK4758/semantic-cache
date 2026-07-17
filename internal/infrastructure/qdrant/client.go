@@ -11,9 +11,9 @@ import (
 )
 
 type Client struct {
-	qdrantClient pb.PointsClient
+	qdrantClient      pb.PointsClient
 	defaultCollection string
-	conn         *grpc.ClientConn
+	conn              *grpc.ClientConn
 }
 
 // NewClient creates a new Qdrant client.
@@ -40,7 +40,7 @@ func (c *Client) Close() {
 }
 
 // Search implements the domain.VectorStore interface.
-func (c *Client) Search(ctx context.Context, collectionName string, vector []float32, metadata map[string]interface{}, limit int) ([]domain.SearchResult, error) {
+func (c *Client) Search(ctx context.Context, collectionName string, vector []float32, metadata map[string]any, limit int) ([]domain.SearchResult, error) {
 	if collectionName == "" {
 		collectionName = c.defaultCollection
 	}
@@ -94,7 +94,7 @@ func (c *Client) Search(ctx context.Context, collectionName string, vector []flo
 			payloadStr = payloadVal.GetStringValue()
 		}
 
-		resultMetadata := make(map[string]interface{})
+		resultMetadata := make(map[string]any)
 		for k, v := range point.Payload {
 			if k != "json_payload" {
 				resultMetadata[k] = v.GetStringValue() // we can decode other types from qdrant if needed
@@ -185,7 +185,7 @@ func (c *Client) Upsert(ctx context.Context, collectionName string, record domai
 }
 
 // CheckMetadata implements the domain.VectorStore interface.
-func (c *Client) CheckMetadata(ctx context.Context, collectionName string, metadata map[string]interface{}) (bool, error) {
+func (c *Client) CheckMetadata(ctx context.Context, collectionName string, metadata map[string]any) (bool, error) {
 	if collectionName == "" {
 		collectionName = c.defaultCollection
 	}
@@ -242,6 +242,94 @@ func (c *Client) CheckMetadata(ctx context.Context, collectionName string, metad
 	}
 
 	return false, nil
+}
+
+// GetByMetadata implements the domain.VectorStore interface.
+func (c *Client) GetByMetadata(ctx context.Context, collectionName string, metadata map[string]any) ([]domain.SearchResult, error) {
+	if collectionName == "" {
+		collectionName = c.defaultCollection
+	}
+
+	var conditions []*pb.Condition
+	for k, v := range metadata {
+		if strVal, ok := v.(string); ok {
+			conditions = append(conditions, &pb.Condition{
+				ConditionOneOf: &pb.Condition_Field{
+					Field: &pb.FieldCondition{
+						Key: k,
+						Match: &pb.Match{
+							MatchValue: &pb.Match_Keyword{
+								Keyword: strVal,
+							},
+						},
+					},
+				},
+			})
+		}
+	}
+
+	if len(conditions) == 0 {
+		return nil, fmt.Errorf("no valid metadata provided for GetByMetadata")
+	}
+
+	filter := &pb.Filter{
+		Must: conditions,
+	}
+
+	req := &pb.ScrollPoints{
+		CollectionName: collectionName,
+		Filter:         filter,
+		Limit:          func() *uint32 { v := uint32(1); return &v }(),
+		WithPayload: &pb.WithPayloadSelector{
+			SelectorOptions: &pb.WithPayloadSelector_Enable{
+				Enable: true,
+			},
+		},
+		WithVectors: &pb.WithVectorsSelector{
+			SelectorOptions: &pb.WithVectorsSelector_Enable{
+				Enable: false,
+			},
+		},
+	}
+
+	resp, err := c.qdrantClient.Scroll(ctx, req)
+	if err != nil {
+		return nil, fmt.Errorf("action failed for job QdrantGetByMetadata: grpc call failed: %w", err)
+	}
+
+	var results []domain.SearchResult
+	for _, point := range resp.Result {
+		payloadStr := ""
+		if payloadVal, ok := point.Payload["json_payload"]; ok {
+			payloadStr = payloadVal.GetStringValue()
+		}
+
+		resultMetadata := make(map[string]any)
+		for k, v := range point.Payload {
+			if k != "json_payload" {
+				resultMetadata[k] = v.GetStringValue()
+			}
+		}
+
+		idStr := ""
+		if point.Id != nil {
+			if uuid := point.Id.GetUuid(); uuid != "" {
+				idStr = uuid
+			}
+		}
+
+		results = append(results, domain.SearchResult{
+			Record: domain.CacheRecord{
+				ID:          idStr,
+				Metadata:    resultMetadata,
+				Vector:      nil, // No vector retrieved
+				JSONPayload: payloadStr,
+			},
+			Score: 1.0, // Exact match metadata is treated as 100% confidence
+		})
+	}
+
+	return results, nil
 }
 
 // compile-time check to ensure Client implements domain.VectorStore
