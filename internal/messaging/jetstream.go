@@ -4,6 +4,8 @@ import (
 	"context"
 	"fmt"
 	"log"
+	"os"
+	"strconv"
 	"time"
 
 	pb "github.com/AndrewK4758/shared_protos"
@@ -48,11 +50,26 @@ func NewJetStreamHandler(natsURL string, app *application.SemanticCacheApp) (*Je
 }
 
 func (h *JetStreamHandler) StartConsumers(ctx context.Context) error {
+	maxAckPending := 1000
+	if envVal := os.Getenv("NATS_MAX_ACK_PENDING"); envVal != "" {
+		if parsed, err := strconv.Atoi(envVal); err == nil {
+			maxAckPending = parsed
+		}
+	}
+
+	pullMaxMessages := 100
+	if envVal := os.Getenv("NATS_PULL_MAX_MESSAGES"); envVal != "" {
+		if parsed, err := strconv.Atoi(envVal); err == nil {
+			pullMaxMessages = parsed
+		}
+	}
+
 	cons, err := h.js.CreateOrUpdateConsumer(ctx, "CACHE_REQUESTS", jetstream.ConsumerConfig{
 		Durable:       "semantic_cache_service_consumer",
 		AckPolicy:     jetstream.AckExplicitPolicy,
 		AckWait:       30 * time.Second,
 		FilterSubject: "cache.requests.>",
+		MaxAckPending: maxAckPending,
 	})
 	if err != nil {
 		return fmt.Errorf("failed to create cache consumer: %w", err)
@@ -61,7 +78,7 @@ func (h *JetStreamHandler) StartConsumers(ctx context.Context) error {
 	log.Println("Listening for Cache Requests on NATS JetStream...")
 	_, err = cons.Consume(func(msg jetstream.Msg) {
 		go h.handleMessage(msg)
-	})
+	}, jetstream.PullMaxMessages(pullMaxMessages))
 	if err != nil {
 		return fmt.Errorf("failed to consume cache requests: %w", err)
 	}
