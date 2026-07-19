@@ -9,7 +9,6 @@ import (
 	"google.golang.org/grpc/credentials/insecure"
 
 	pb "github.com/AndrewK4758/shared_protos"
-	"google.golang.org/protobuf/types/known/structpb"
 )
 
 type SeedItem struct {
@@ -52,14 +51,10 @@ func main() {
 
 	for _, item := range items {
 		ctx, cancel := context.WithTimeout(context.Background(), 60*time.Second)
-		metadataStruct, _ := structpb.NewStruct(map[string]any{
-			"subject_class": item.SubjectClass,
-		})
-
 		req := &pb.SeedCacheRequest{
 			CollectionName:   item.Collection,
-			TemplateText:     item.SubjectClass, // CRITICAL: Embed the subject string, not a full template body
-			Metadata:         metadataStruct,
+			TemplateText:     item.SubjectClass,
+			Identity:         &pb.InfrastructureIdentity{JobId: "seed"},
 			ExtractedPayload: item.JsonPayload,
 		}
 

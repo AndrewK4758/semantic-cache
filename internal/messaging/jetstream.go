@@ -84,10 +84,10 @@ func (h *JetStreamHandler) handleMessage(msg jetstream.Msg) {
 		}
 
 		metadata := make(map[string]any)
-		if reqMsg.Request != nil && reqMsg.Request.Metadata != nil {
-			for k, v := range reqMsg.Request.Metadata.Fields {
-				metadata[k] = v.AsInterface()
-			}
+		if reqMsg.Request != nil && reqMsg.Request.Identity != nil {
+			metadata["tenant_id"] = reqMsg.Request.Identity.TenantId
+			metadata["app_id"] = reqMsg.Request.Identity.AppId
+			metadata["job_id"] = reqMsg.Request.Identity.JobId
 		}
 
 		_ = h.app.StoreExtraction(ctx, reqMsg.Request.CollectionName, reqMsg.Request.Text, metadata, reqMsg.Request.ExtractedPayload)

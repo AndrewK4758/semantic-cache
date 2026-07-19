@@ -27,8 +27,12 @@ func (h *SemanticCacheHandler) CheckCache(ctx context.Context, req *pb.CheckCach
 	log.Printf("INFO: [gRPC] Received CheckCache request. Collection: %s", req.CollectionName)
 
 	var metadata map[string]any
-	if req.Metadata != nil {
-		metadata = req.Metadata.AsMap()
+	if req.Identity != nil {
+		metadata = map[string]any{
+			"tenant_id": req.Identity.TenantId,
+			"app_id":    req.Identity.AppId,
+			"job_id":    req.Identity.JobId,
+		}
 	}
 
 	hit, payload, confidence, err := h.app.CheckCache(ctx, req.CollectionName, req.Text, metadata, req.Threshold)
@@ -50,8 +54,12 @@ func (h *SemanticCacheHandler) StoreExtraction(ctx context.Context, req *pb.Stor
 	log.Printf("INFO: [gRPC] Received StoreExtraction request. Collection: %s", req.CollectionName)
 
 	var metadata map[string]any
-	if req.Metadata != nil {
-		metadata = req.Metadata.AsMap()
+	if req.Identity != nil {
+		metadata = map[string]any{
+			"tenant_id": req.Identity.TenantId,
+			"app_id":    req.Identity.AppId,
+			"job_id":    req.Identity.JobId,
+		}
 	}
 
 	err := h.app.StoreExtraction(ctx, req.CollectionName, req.Text, metadata, req.ExtractedPayload)
@@ -69,8 +77,12 @@ func (h *SemanticCacheHandler) SeedCache(ctx context.Context, req *pb.SeedCacheR
 	log.Printf("INFO: [gRPC] Received SeedCache request. Collection: %s", req.CollectionName)
 
 	var metadata map[string]any
-	if req.Metadata != nil {
-		metadata = req.Metadata.AsMap()
+	if req.Identity != nil {
+		metadata = map[string]any{
+			"tenant_id": req.Identity.TenantId,
+			"app_id":    req.Identity.AppId,
+			"job_id":    req.Identity.JobId,
+		}
 	}
 
 	// Seeding uses the exact same underlying logic as storing an extraction
@@ -89,8 +101,12 @@ func (h *SemanticCacheHandler) CheckMetadataExists(ctx context.Context, req *pb.
 	log.Printf("INFO: [gRPC] Received CheckMetadataExists request. Collection: %s", req.CollectionName)
 
 	var metadata map[string]any
-	if req.MetadataFilter != nil {
-		metadata = req.MetadataFilter.AsMap()
+	if req.Identity != nil {
+		metadata = map[string]any{
+			"tenant_id": req.Identity.TenantId,
+			"app_id":    req.Identity.AppId,
+			"job_id":    req.Identity.JobId,
+		}
 	}
 
 	exists, err := h.app.CheckMetadata(ctx, req.CollectionName, metadata)
