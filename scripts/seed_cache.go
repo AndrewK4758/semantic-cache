@@ -56,6 +56,7 @@ func main() {
 			TemplateText:     item.SubjectClass,
 			Identity:         &pb.InfrastructureIdentity{JobId: "seed"},
 			ExtractedPayload: item.JsonPayload,
+			Metadata:         map[string]string{"subject_class": item.SubjectClass},
 		}
 
 		res, err := client.SeedCache(ctx, req)

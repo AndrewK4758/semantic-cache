@@ -22,18 +22,24 @@ func NewSemanticCacheHandler(app *application.SemanticCacheApp) *SemanticCacheHa
 	}
 }
 
+func buildMetadata(reqMetadata map[string]string, identity *pb.InfrastructureIdentity) map[string]any {
+	metadata := make(map[string]any)
+	for k, v := range reqMetadata {
+		metadata[k] = v
+	}
+	if identity != nil {
+		metadata["tenant_id"] = identity.TenantId
+		metadata["app_id"] = identity.AppId
+		metadata["job_id"] = identity.JobId
+	}
+	return metadata
+}
+
 // CheckCache handles the CheckCache gRPC request.
 func (h *SemanticCacheHandler) CheckCache(ctx context.Context, req *pb.CheckCacheRequest) (*pb.CheckCacheResponse, error) {
 	log.Printf("INFO: [gRPC] Received CheckCache request. Collection: %s", req.CollectionName)
 
-	var metadata map[string]any
-	if req.Identity != nil {
-		metadata = map[string]any{
-			"tenant_id": req.Identity.TenantId,
-			"app_id":    req.Identity.AppId,
-			"job_id":    req.Identity.JobId,
-		}
-	}
+	metadata := buildMetadata(req.Metadata, req.Identity)
 
 	hit, payload, confidence, err := h.app.CheckCache(ctx, req.CollectionName, req.Text, metadata, req.Threshold)
 	if err != nil {
@@ -53,14 +59,7 @@ func (h *SemanticCacheHandler) CheckCache(ctx context.Context, req *pb.CheckCach
 func (h *SemanticCacheHandler) StoreExtraction(ctx context.Context, req *pb.StoreExtractionRequest) (*pb.StoreExtractionResponse, error) {
 	log.Printf("INFO: [gRPC] Received StoreExtraction request. Collection: %s", req.CollectionName)
 
-	var metadata map[string]any
-	if req.Identity != nil {
-		metadata = map[string]any{
-			"tenant_id": req.Identity.TenantId,
-			"app_id":    req.Identity.AppId,
-			"job_id":    req.Identity.JobId,
-		}
-	}
+	metadata := buildMetadata(req.Metadata, req.Identity)
 
 	err := h.app.StoreExtraction(ctx, req.CollectionName, req.Text, metadata, req.ExtractedPayload)
 	if err != nil {
@@ -76,14 +75,7 @@ func (h *SemanticCacheHandler) StoreExtraction(ctx context.Context, req *pb.Stor
 func (h *SemanticCacheHandler) SeedCache(ctx context.Context, req *pb.SeedCacheRequest) (*pb.SeedCacheResponse, error) {
 	log.Printf("INFO: [gRPC] Received SeedCache request. Collection: %s", req.CollectionName)
 
-	var metadata map[string]any
-	if req.Identity != nil {
-		metadata = map[string]any{
-			"tenant_id": req.Identity.TenantId,
-			"app_id":    req.Identity.AppId,
-			"job_id":    req.Identity.JobId,
-		}
-	}
+	metadata := buildMetadata(req.Metadata, req.Identity)
 
 	// Seeding uses the exact same underlying logic as storing an extraction
 	err := h.app.StoreExtraction(ctx, req.CollectionName, req.TemplateText, metadata, req.ExtractedPayload)
@@ -100,14 +92,7 @@ func (h *SemanticCacheHandler) SeedCache(ctx context.Context, req *pb.SeedCacheR
 func (h *SemanticCacheHandler) CheckMetadataExists(ctx context.Context, req *pb.CheckMetadataRequest) (*pb.CheckMetadataResponse, error) {
 	log.Printf("INFO: [gRPC] Received CheckMetadataExists request. Collection: %s", req.CollectionName)
 
-	var metadata map[string]any
-	if req.Identity != nil {
-		metadata = map[string]any{
-			"tenant_id": req.Identity.TenantId,
-			"app_id":    req.Identity.AppId,
-			"job_id":    req.Identity.JobId,
-		}
-	}
+	metadata := buildMetadata(nil, req.Identity) // CheckMetadataRequest might not have Metadata, keep backward compatible
 
 	exists, err := h.app.CheckMetadata(ctx, req.CollectionName, metadata)
 	if err != nil {
