@@ -36,7 +36,7 @@ func (a *SemanticCacheApp) CheckCache(ctx context.Context, collectionName string
 		if err == nil && len(metaResults) > 0 {
 			topMatch := metaResults[0]
 			log.Printf("INFO: [SemanticCacheApp] CACHE HIT [METADATA_EXACT_MATCH]! Bypassing embedding generation.")
-			return true, topMatch.Record.JSONPayload, 1.0, nil
+			return true, topMatch.Record.JSONPayload, topMatch.Score, nil
 		}
 		log.Printf("INFO: [SemanticCacheApp] TIER 1 Miss: No exact metadata match found. Proceeding to Semantic Fallback.")
 	}

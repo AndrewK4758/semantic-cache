@@ -30,7 +30,6 @@ func buildMetadata(reqMetadata map[string]string, identity *pb.InfrastructureIde
 	if identity != nil {
 		metadata["tenant_id"] = identity.TenantId
 		metadata["app_id"] = identity.AppId
-		metadata["job_id"] = identity.JobId
 	}
 	return metadata
 }
@@ -92,7 +91,7 @@ func (h *SemanticCacheHandler) SeedCache(ctx context.Context, req *pb.SeedCacheR
 func (h *SemanticCacheHandler) CheckMetadataExists(ctx context.Context, req *pb.CheckMetadataRequest) (*pb.CheckMetadataResponse, error) {
 	log.Printf("INFO: [gRPC] Received CheckMetadataExists request. Collection: %s", req.CollectionName)
 
-	metadata := buildMetadata(nil, req.Identity) // CheckMetadataRequest might not have Metadata, keep backward compatible
+	metadata := buildMetadata(req.Metadata, req.Identity)
 
 	exists, err := h.app.CheckMetadata(ctx, req.CollectionName, metadata)
 	if err != nil {
