@@ -1,6 +1,7 @@
 package main
 
 import (
+	"github.com/AndrewK4758/shared_utils/logger"
 	"context"
 	"log"
 	"net"
@@ -21,6 +22,7 @@ import (
 )
 
 func main() {
+	logger.InitLogger()
 	// Attempt to load .env, but ignore error if it doesn't exist
 	_ = godotenv.Load()
 
