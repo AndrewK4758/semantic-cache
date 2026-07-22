@@ -2,13 +2,13 @@ package main
 
 import (
 	"context"
-	"log"
 	"time"
 
 	"google.golang.org/grpc"
 	"google.golang.org/grpc/credentials/insecure"
 
 	pb "github.com/AndrewK4758/shared_protos"
+	"github.com/AndrewK4758/shared_utils/logger"
 )
 
 type SeedItem struct {
@@ -20,7 +20,7 @@ type SeedItem struct {
 func main() {
 	conn, err := grpc.Dial("localhost:50055", grpc.WithTransportCredentials(insecure.NewCredentials()))
 	if err != nil {
-		log.Fatalf("did not connect: %v", err)
+		logger.Fatal("SemanticCache", "did not connect: %v", err)
 	}
 	defer conn.Close()
 
@@ -61,9 +61,9 @@ func main() {
 
 		res, err := client.SeedCache(ctx, req)
 		if err != nil {
-			log.Printf("Failed to seed %s: %v", item.SubjectClass, err)
+			logger.Info("SemanticCache", "Failed to seed %s: %v", item.SubjectClass, err)
 		} else {
-			log.Printf("Seeded %s: %s", item.SubjectClass, res.Message)
+			logger.Info("SemanticCache", "Seeded %s: %s", item.SubjectClass, res.Message)
 		}
 		cancel()
 	}

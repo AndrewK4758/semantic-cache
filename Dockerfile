@@ -8,7 +8,6 @@ WORKDIR /app
 # Pull in shared_protos via Docker additional contexts
 COPY --from=shared_protos . /app/shared_protos
 COPY --from=shared_utils . /app/shared_utils
-COPY --from=shared_logger . /app/shared_logger
 COPY . /app/semantic_cache_service
 
 WORKDIR /app/semantic_cache_service
@@ -16,7 +15,6 @@ WORKDIR /app/semantic_cache_service
 # Add local replace directive for development
 RUN go mod edit -replace github.com/AndrewK4758/shared_protos=../shared_protos
 RUN go mod edit -replace github.com/AndrewK4758/shared_utils=../shared_utils
-RUN go mod edit -replace github.com/AndrewK4758/shared_logger=../shared_logger
 RUN go mod download
 
 # Build the executable

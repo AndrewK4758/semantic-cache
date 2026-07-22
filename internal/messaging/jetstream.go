@@ -3,12 +3,12 @@ package messaging
 import (
 	"context"
 	"fmt"
-	"log"
 	"os"
 	"strconv"
 	"time"
 
 	pb "github.com/AndrewK4758/shared_protos"
+	"github.com/AndrewK4758/shared_utils/logger"
 	"github.com/doc_processor/semantic_cache_service/internal/application"
 	"github.com/nats-io/nats.go"
 	"github.com/nats-io/nats.go/jetstream"
@@ -75,7 +75,7 @@ func (h *JetStreamHandler) StartConsumers(ctx context.Context) error {
 		return fmt.Errorf("failed to create cache consumer: %w", err)
 	}
 
-	log.Println("Listening for Cache Requests on NATS JetStream...")
+	logger.Info("SemanticCache", "%v", "Listening for Cache Requests on NATS JetStream...")
 	_, err = cons.Consume(func(msg jetstream.Msg) {
 		go h.handleMessage(msg)
 	}, jetstream.PullMaxMessages(pullMaxMessages))
@@ -95,7 +95,7 @@ func (h *JetStreamHandler) handleMessage(msg jetstream.Msg) {
 	if subject == "cache.requests.store" {
 		var reqMsg pb.CacheStoreMessage
 		if err := protojson.Unmarshal(msg.Data(), &reqMsg); err != nil {
-			log.Printf("ERROR: Failed to unmarshal CacheStoreMessage: %v", err)
+			logger.Info("SemanticCache", "ERROR: Failed to unmarshal CacheStoreMessage: %v", err)
 			_ = msg.Nak()
 			return
 		}
@@ -112,7 +112,7 @@ func (h *JetStreamHandler) handleMessage(msg jetstream.Msg) {
 		_ = msg.Ack()
 
 	} else {
-		log.Printf("WARN: Unknown cache request subject: %s", subject)
+		logger.Info("SemanticCache", "WARN: Unknown cache request subject: %s", subject)
 		_ = msg.Ack()
 	}
 }

@@ -1,13 +1,13 @@
 package main
 
 import (
-	"github.com/AndrewK4758/shared_utils/logger"
 	"context"
-	"log"
 	"net"
 	"os"
 	"os/signal"
 	"syscall"
+
+	"github.com/AndrewK4758/shared_utils/logger"
 
 	pb "github.com/AndrewK4758/shared_protos"
 	"github.com/doc_processor/semantic_cache_service/internal/application"
@@ -38,7 +38,7 @@ func main() {
 
 	qdrantClient, err := qdrant.NewClient(qdrantAddr, collectionName)
 	if err != nil {
-		log.Fatalf("Failed to initialize Qdrant client: %v", err)
+		logger.Fatal("SemanticCache", "Failed to initialize Qdrant client: %v", err)
 	}
 	defer qdrantClient.Close()
 
@@ -52,18 +52,18 @@ func main() {
 	natsURL := getEnv("NATS_URL", "nats://localhost:4222")
 	jsHandler, err := messaging.NewJetStreamHandler(natsURL, app)
 	if err != nil {
-		log.Fatalf("Failed to initialize JetStream handler: %v", err)
+		logger.Fatal("SemanticCache", "Failed to initialize JetStream handler: %v", err)
 	}
 	defer jsHandler.Close()
 
 	if err := jsHandler.StartConsumers(context.Background()); err != nil {
-		log.Fatalf("Failed to start JetStream consumers: %v", err)
+		logger.Fatal("SemanticCache", "Failed to start JetStream consumers: %v", err)
 	}
 
 	// gRPC Server Setup
 	lis, err := net.Listen("tcp", ":"+grpcPort)
 	if err != nil {
-		log.Fatalf("Failed to listen on port %s: %v", grpcPort, err)
+		logger.Fatal("SemanticCache", "Failed to listen on port %s: %v", grpcPort, err)
 	}
 
 	grpcServer := grpc.NewServer()
@@ -72,9 +72,9 @@ func main() {
 
 	// Graceful Shutdown
 	go func() {
-		log.Printf("Semantic Cache Service listening on port %s", grpcPort)
+		logger.Info("SemanticCache", "Semantic Cache Service listening on port %s", grpcPort)
 		if err := grpcServer.Serve(lis); err != nil {
-			log.Fatalf("Failed to serve gRPC server: %v", err)
+			logger.Fatal("SemanticCache", "Failed to serve gRPC server: %v", err)
 		}
 	}()
 
@@ -82,9 +82,9 @@ func main() {
 	signal.Notify(stop, os.Interrupt, syscall.SIGTERM)
 	<-stop
 
-	log.Println("Shutting down Semantic Cache Service gracefully...")
+	logger.Info("SemanticCache", "%v", "Shutting down Semantic Cache Service gracefully...")
 	grpcServer.GracefulStop()
-	log.Println("Shutdown complete.")
+	logger.Info("SemanticCache", "%v", "Shutdown complete.")
 }
 
 func getEnv(key, fallback string) string {
