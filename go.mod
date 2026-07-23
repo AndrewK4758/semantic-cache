@@ -1,6 +1,6 @@
 module github.com/doc_processor/semantic_cache_service
 
-go 1.26.4
+go 1.23.0
 
 require (
 	github.com/qdrant/go-client v1.18.3
