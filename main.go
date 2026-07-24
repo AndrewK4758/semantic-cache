@@ -27,7 +27,7 @@ func main() {
 	_ = godotenv.Load()
 
 	// Configuration
-	grpcPort := getEnv("SERVER_PORT", "50055")
+	grpcPort := getEnv("GRPC_PORT", "50055")
 	qdrantAddr := getEnv("QDRANT_URL", "localhost:6334")
 	openaiURL := getEnv("OPENAI_BASE_URL", "http://localhost:11434/v1")
 	openaiModel := getEnv("OPENAI_EMBEDDING_MODEL", "all-minilm:latest")

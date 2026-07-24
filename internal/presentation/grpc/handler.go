@@ -102,3 +102,38 @@ func (h *SemanticCacheHandler) CheckMetadataExists(ctx context.Context, req *pb.
 	logger.Info("SemanticCache", "INFO: [gRPC] CheckMetadataExists successful.")
 	return &pb.CheckMetadataResponse{Exists: exists}, nil
 }
+
+// QueryBlankDocument handles the QueryBlankDocument gRPC request.
+func (h *SemanticCacheHandler) QueryBlankDocument(ctx context.Context, req *pb.QueryBlankDocumentRequest) (*pb.QueryBlankDocumentResponse, error) {
+	logger.Info("SemanticCache", "INFO: [gRPC] Received QueryBlankDocument request. Collection: %s", req.CollectionName)
+
+	metadata := buildMetadata(nil, req.Identity)
+	hit, payload, confidence, err := h.app.CheckCache(ctx, req.CollectionName, req.TextRepresentation, metadata, req.ConfidenceThreshold)
+	if err != nil {
+		logger.Error("SemanticCache", "ERROR: [gRPC] QueryBlankDocument failed: %v", err)
+		return nil, fmt.Errorf("application layer CheckCache failed: %w", err)
+	}
+
+	logger.Info("SemanticCache", "INFO: [gRPC] QueryBlankDocument successful. Hit=%v, Confidence=%.4f", hit, confidence)
+	return &pb.QueryBlankDocumentResponse{
+		IsBlankMatch:          hit,
+		Confidence:            confidence,
+		MatchedClassification: payload,
+	}, nil
+}
+
+// RegisterBlankDocument handles the RegisterBlankDocument gRPC request.
+func (h *SemanticCacheHandler) RegisterBlankDocument(ctx context.Context, req *pb.RegisterBlankDocumentRequest) (*pb.RegisterBlankDocumentResponse, error) {
+	logger.Info("SemanticCache", "INFO: [gRPC] Received RegisterBlankDocument request. Collection: %s", req.CollectionName)
+
+	metadata := buildMetadata(nil, req.Identity)
+	
+	err := h.app.StoreExtraction(ctx, req.CollectionName, req.TextRepresentation, metadata, "blank_document")
+	if err != nil {
+		logger.Error("SemanticCache", "ERROR: [gRPC] RegisterBlankDocument failed: %v", err)
+		return &pb.RegisterBlankDocumentResponse{Success: false}, fmt.Errorf("application layer StoreExtraction failed: %w", err)
+	}
+
+	logger.Info("SemanticCache", "INFO: [gRPC] RegisterBlankDocument successful.")
+	return &pb.RegisterBlankDocumentResponse{Success: true}, nil
+}
