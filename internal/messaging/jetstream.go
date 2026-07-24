@@ -173,7 +173,11 @@ func (h *JetStreamHandler) handleMessage(msg jetstream.Msg) {
 	logger.Info("SemanticCache", "Received action request on subject: %s", subject)
 
 	if req.NodeConfig == nil || req.NodeConfig.Cache == nil {
-		h.sendErrorReply(ctx, msg, "missing NodeConfig or Cache config", req.Identity)
+		if err := h.sendErrorReply(ctx, msg, "missing NodeConfig or Cache config", req.Identity); err != nil {
+			logger.Error("SemanticCache", "Failed to send error reply: %v", err)
+			msg.NakWithDelay(5 * time.Second)
+			return
+		}
 		durationMs := time.Since(startTime).Milliseconds()
 		msg.Ack()
 		natsutil.LogJetStreamEvent(natsutil.JetStreamLogEvent{
@@ -232,7 +236,11 @@ func (h *JetStreamHandler) handleMessage(msg jetstream.Msg) {
 		}
 		resultBytes, _ := json.Marshal(resultMap)
 
-		h.sendSuccessReply(ctx, msg, string(resultBytes), req.Identity)
+		if err := h.sendSuccessReply(ctx, msg, string(resultBytes), req.Identity); err != nil {
+			logger.Error("SemanticCache", "Failed to send success reply: %v", err)
+			msg.NakWithDelay(5 * time.Second)
+			return
+		}
 		durationMs := time.Since(startTime).Milliseconds()
 		msg.Ack()
 		natsutil.LogJetStreamEvent(natsutil.JetStreamLogEvent{
@@ -276,7 +284,11 @@ func (h *JetStreamHandler) handleMessage(msg jetstream.Msg) {
 		}
 		resultBytes, _ := json.Marshal(resultMap)
 
-		h.sendSuccessReply(ctx, msg, string(resultBytes), req.Identity)
+		if err := h.sendSuccessReply(ctx, msg, string(resultBytes), req.Identity); err != nil {
+			logger.Error("SemanticCache", "Failed to send success reply: %v", err)
+			msg.NakWithDelay(5 * time.Second)
+			return
+		}
 		durationMs := time.Since(startTime).Milliseconds()
 		msg.Ack()
 		natsutil.LogJetStreamEvent(natsutil.JetStreamLogEvent{
@@ -317,13 +329,13 @@ func hitStr(hit bool) string {
 	return "miss"
 }
 
-func (h *JetStreamHandler) sendErrorReply(ctx context.Context, msg jetstream.Msg, errorMsg string, reqIdentity *pb.InfrastructureIdentity) {
+func (h *JetStreamHandler) sendErrorReply(ctx context.Context, msg jetstream.Msg, errorMsg string, reqIdentity *pb.InfrastructureIdentity) error {
 	replySubj := ""
 	if headers := msg.Headers(); headers != nil {
 		replySubj = headers.Get("Reply-Subject")
 	}
 	if replySubj == "" {
-		return
+		return nil
 	}
 
 	resp := &pb.PerformActionResponse{
@@ -333,30 +345,30 @@ func (h *JetStreamHandler) sendErrorReply(ctx context.Context, msg jetstream.Msg
 			Message: errorMsg,
 		},
 	}
-	h.publishReply(ctx, replySubj, resp, reqIdentity)
+	return h.publishReply(ctx, replySubj, resp, reqIdentity)
 }
 
-func (h *JetStreamHandler) sendSuccessReply(ctx context.Context, msg jetstream.Msg, resultJson string, reqIdentity *pb.InfrastructureIdentity) {
+func (h *JetStreamHandler) sendSuccessReply(ctx context.Context, msg jetstream.Msg, resultJson string, reqIdentity *pb.InfrastructureIdentity) error {
 	replySubj := ""
 	if headers := msg.Headers(); headers != nil {
 		replySubj = headers.Get("Reply-Subject")
 	}
 	if replySubj == "" {
-		return
+		return nil
 	}
 
 	resp := &pb.PerformActionResponse{
 		Success:          true,
 		ActionResultJson: resultJson,
 	}
-	h.publishReply(ctx, replySubj, resp, reqIdentity)
+	return h.publishReply(ctx, replySubj, resp, reqIdentity)
 }
 
-func (h *JetStreamHandler) publishReply(ctx context.Context, subj string, resp *pb.PerformActionResponse, reqIdentity *pb.InfrastructureIdentity) {
+func (h *JetStreamHandler) publishReply(ctx context.Context, subj string, resp *pb.PerformActionResponse, reqIdentity *pb.InfrastructureIdentity) error {
 	data, err := proto.Marshal(resp)
 	if err != nil {
 		logger.Error("SemanticCache", "Failed to marshal reply: %v", err)
-		return
+		return err
 	}
 	_, pubErr := h.js.Publish(ctx, subj, data)
 	t, a, j := natsutil.ExtractIdentity(reqIdentity)
@@ -373,7 +385,9 @@ func (h *JetStreamHandler) publishReply(ctx context.Context, subj string, resp *
 	})
 	if pubErr != nil {
 		logger.Error("SemanticCache", "Failed to publish reply to %s: %v", subj, pubErr)
+		return pubErr
 	}
+	return nil
 }
 
 func (h *JetStreamHandler) Close() {

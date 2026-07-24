@@ -2,13 +2,13 @@ package main
 
 import (
 	"context"
+	"fmt"
 	"time"
 
 	"google.golang.org/grpc"
 	"google.golang.org/grpc/credentials/insecure"
 
 	pb "github.com/AndrewK4758/shared_protos"
-	"github.com/AndrewK4758/shared_utils/logger"
 )
 
 type SeedItem struct {
@@ -20,7 +20,8 @@ type SeedItem struct {
 func main() {
 	conn, err := grpc.Dial("localhost:50055", grpc.WithTransportCredentials(insecure.NewCredentials()))
 	if err != nil {
-		logger.Fatal("SemanticCache", "did not connect: %v", err)
+		fmt.Printf("did not connect: %v\n", err)
+		return
 	}
 	defer conn.Close()
 
@@ -39,12 +40,12 @@ func main() {
 		},
 		{
 			Collection:   "incoming_email_templates",
-			JsonPayload:  `{"DocumentType": "UNKNOWN"}`,
+			JsonPayload:  `{"DocumentType": "CLOSING"}`,
 			SubjectClass: "Deed Service Updated",
 		},
 		{
 			Collection:   "incoming_email_templates",
-			JsonPayload:  `{"DocumentType": "UNKNOWN"}`,
+			JsonPayload:  `{"DocumentType": "CLOSING"}`,
 			SubjectClass: "Deed Service Ordered",
 		},
 	}
@@ -54,16 +55,16 @@ func main() {
 		req := &pb.SeedCacheRequest{
 			CollectionName:   item.Collection,
 			TemplateText:     item.SubjectClass,
-			Identity:         &pb.InfrastructureIdentity{JobId: "seed"},
+			Identity:         &pb.InfrastructureIdentity{JobId: "seed", TenantId: "CNJ", AppId: "Artemis"},
 			ExtractedPayload: item.JsonPayload,
 			Metadata:         map[string]string{"subject_class": item.SubjectClass},
 		}
 
 		res, err := client.SeedCache(ctx, req)
 		if err != nil {
-			logger.Info("SemanticCache", "Failed to seed %s: %v", item.SubjectClass, err)
+			fmt.Printf("Failed to seed %s: %v\n", item.SubjectClass, err)
 		} else {
-			logger.Info("SemanticCache", "Seeded %s: %s", item.SubjectClass, res.Message)
+			fmt.Printf("Seeded %s: %s\n", item.SubjectClass, res.Message)
 		}
 		cancel()
 	}
