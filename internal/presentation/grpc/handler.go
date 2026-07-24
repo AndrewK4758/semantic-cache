@@ -127,7 +127,7 @@ func (h *SemanticCacheHandler) RegisterBlankDocument(ctx context.Context, req *p
 	logger.Info("SemanticCache", "INFO: [gRPC] Received RegisterBlankDocument request. Collection: %s", req.CollectionName)
 
 	metadata := buildMetadata(nil, req.Identity)
-	
+
 	err := h.app.StoreExtraction(ctx, req.CollectionName, req.TextRepresentation, metadata, "blank_document")
 	if err != nil {
 		logger.Error("SemanticCache", "ERROR: [gRPC] RegisterBlankDocument failed: %v", err)

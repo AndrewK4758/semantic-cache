@@ -35,7 +35,7 @@ cd /home/ak/projects/doc_processor_service/semantic_cache_service
 export SERVER_PORT=50055
 export QDRANT_URL=localhost:6334
 export OPENAI_BASE_URL=http://localhost:11434/v1
-export OPENAI_EMBEDDING_MODEL=all-minilm:latest
+export OPENAI_EMBEDDING_MODEL=all-MiniLM-L6-v2
 export QDRANT_COLLECTION=document_chunks
 
 go run main.go
@@ -49,7 +49,7 @@ cd \home\ak\projects\doc_processor_service\semantic_cache_service
 $env:SERVER_PORT="50055"
 $env:QDRANT_URL="localhost:6334"
 $env:OPENAI_BASE_URL="http://localhost:11434/v1"
-$env:OPENAI_EMBEDDING_MODEL="all-minilm:latest"
+$env:OPENAI_EMBEDDING_MODEL="all-MiniLM-L6-v2"
 $env:QDRANT_COLLECTION="document_chunks"
 
 go run main.go

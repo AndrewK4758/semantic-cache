@@ -29,22 +29,22 @@ func main() {
 	items := []SeedItem{
 		{
 			Collection:   "incoming_email_templates",
-			JsonPayload:  `{"classification": "Title_Opinion"}`,
+			JsonPayload:  `{"DocumentType": "TITLE_OPINION"}`,
 			SubjectClass: "Attorney Service Ordered",
 		},
 		{
 			Collection:   "incoming_email_templates",
-			JsonPayload:  `{"classification": "Closing"}`,
+			JsonPayload:  `{"DocumentType": "CLOSING"}`,
 			SubjectClass: "Closing Service Ordered",
 		},
 		{
 			Collection:   "incoming_email_templates",
-			JsonPayload:  `{"classification": "Deed"}`,
+			JsonPayload:  `{"DocumentType": "UNKNOWN"}`,
 			SubjectClass: "Deed Service Updated",
 		},
 		{
 			Collection:   "incoming_email_templates",
-			JsonPayload:  `{"classification": "Deed"}`,
+			JsonPayload:  `{"DocumentType": "UNKNOWN"}`,
 			SubjectClass: "Deed Service Ordered",
 		},
 	}

@@ -73,19 +73,19 @@ func TestOpenAIClient_Generate(t *testing.T) {
 
 			client := NewClient(server.URL, "test-embed-model")
 			ctx := context.Background()
-			
+
 			got, err := client.Generate(ctx, tt.text)
 
 			if (err != nil) != tt.wantErr {
 				t.Errorf("Client.Generate() error = %v, wantErr %v", err, tt.wantErr)
 				return
 			}
-			
+
 			if len(got) != len(tt.wantResult) {
 				t.Errorf("Client.Generate() = %v, want %v", got, tt.wantResult)
 				return
 			}
-			
+
 			for i, v := range got {
 				if v != tt.wantResult[i] {
 					t.Errorf("Client.Generate() = %v, want %v", got, tt.wantResult)

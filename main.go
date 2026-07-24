@@ -7,6 +7,7 @@ import (
 	"os/signal"
 	"syscall"
 
+	"github.com/AndrewK4758/shared_utils/envutil"
 	"github.com/AndrewK4758/shared_utils/logger"
 
 	pb "github.com/AndrewK4758/shared_protos"
@@ -15,7 +16,6 @@ import (
 	"github.com/doc_processor/semantic_cache_service/internal/infrastructure/qdrant"
 	"github.com/doc_processor/semantic_cache_service/internal/messaging"
 	grpchandler "github.com/doc_processor/semantic_cache_service/internal/presentation/grpc"
-	"github.com/joho/godotenv"
 
 	"google.golang.org/grpc"
 	"google.golang.org/grpc/reflection"
@@ -24,13 +24,13 @@ import (
 func main() {
 	logger.InitLogger()
 	// Attempt to load .env, but ignore error if it doesn't exist
-	_ = godotenv.Load()
+	envutil.LoadEnv(".env", "semantic_cache_service/.env", "../.env", "../../.env")
 
 	// Configuration
 	grpcPort := getEnv("GRPC_PORT", "50055")
 	qdrantAddr := getEnv("QDRANT_URL", "localhost:6334")
 	openaiURL := getEnv("OPENAI_BASE_URL", "http://localhost:11434/v1")
-	openaiModel := getEnv("OPENAI_EMBEDDING_MODEL", "all-minilm:latest")
+	openaiModel := envutil.GetEmbeddingModel("all-minilm:latest")
 	collectionName := getEnv("QDRANT_COLLECTION", "incoming_email_templates")
 
 	// Infrastructure
