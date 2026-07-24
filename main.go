@@ -22,9 +22,9 @@ import (
 )
 
 func main() {
-	logger.InitLogger()
 	// Attempt to load .env, but ignore error if it doesn't exist
 	envutil.LoadEnv(".env", "semantic_cache_service/.env", "../.env", "../../.env")
+	logger.InitLogger()
 
 	// Configuration
 	grpcPort := getEnv("GRPC_PORT", "50055")
