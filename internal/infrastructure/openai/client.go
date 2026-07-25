@@ -9,6 +9,7 @@ import (
 	"net/http"
 	"strings"
 
+	"github.com/AndrewK4758/shared_utils/logger"
 	"github.com/doc_processor/semantic_cache_service/internal/domain"
 )
 
@@ -51,6 +52,7 @@ func (c *Client) Generate(ctx context.Context, text string) ([]float32, error) {
 	}
 
 	url := fmt.Sprintf("%s/embeddings", strings.TrimSuffix(c.baseURL, "/"))
+	logger.Info("Semantic_Cache", "[Semantic Cache] Sending request to %s with model %s", url, c.modelName)
 	req, err := http.NewRequestWithContext(ctx, http.MethodPost, url, bytes.NewReader(bodyBytes))
 	if err != nil {
 		return nil, fmt.Errorf("action failed for job OpenAIGenerate: failed to create request: %w", err)
