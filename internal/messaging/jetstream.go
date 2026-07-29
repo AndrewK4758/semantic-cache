@@ -4,16 +4,18 @@ import (
 	"context"
 	"encoding/json"
 	"fmt"
-	"github.com/AndrewK4758/shared_utils/envutil"
 	"strconv"
 	"time"
 
 	pb "github.com/AndrewK4758/shared_protos"
+	"github.com/AndrewK4758/shared_utils/envutil"
 	"github.com/AndrewK4758/shared_utils/logger"
 	"github.com/AndrewK4758/shared_utils/natsutil"
+	"github.com/AndrewK4758/shared_utils/workflowparser"
 	"github.com/doc_processor/semantic_cache_service/internal/application"
 	"github.com/nats-io/nats.go"
 	"github.com/nats-io/nats.go/jetstream"
+
 	"google.golang.org/protobuf/proto"
 )
 
@@ -43,14 +45,14 @@ func NewJetStreamHandler(natsURL string, app *application.SemanticCacheApp) (*Je
 
 func (h *JetStreamHandler) StartConsumers(ctx context.Context) error {
 	maxAckPending := 1000
-	if envVal := envutil.GetStringOrDefault("NATS_MAX_ACK_PENDING", ""); envVal != "" {
+	if envVal := envutil.MustGetString("NATS_MAX_ACK_PENDING"); envVal != "" {
 		if parsed, err := strconv.Atoi(envVal); err == nil {
 			maxAckPending = parsed
 		}
 	}
 
 	pullMaxMessages := 100
-	if envVal := envutil.GetStringOrDefault("NATS_PULL_MAX_MESSAGES", ""); envVal != "" {
+	if envVal := envutil.MustGetString("NATS_PULL_MAX_MESSAGES"); envVal != "" {
 		if parsed, err := strconv.Atoi(envVal); err == nil {
 			pullMaxMessages = parsed
 		}
@@ -100,11 +102,24 @@ func (h *JetStreamHandler) handleMessage(msg jetstream.Msg) {
 		attempt = meta.NumDelivered
 	}
 
-	t, a, j := "default", "default", "default"
 	req := &pb.ExecuteWorkflowNodeRequest{}
-	if unmarshalErr := proto.Unmarshal(msg.Data(), req); unmarshalErr == nil && req.Identity != nil {
-		t, a, j = natsutil.ExtractIdentity(req.Identity)
+	unmarshalErr := proto.Unmarshal(msg.Data(), req)
+	if unmarshalErr != nil {
+		logger.Error("SemanticCache", "Failed to unmarshal request: %v", unmarshalErr)
+		msg.Term()
+		return
 	}
+
+	parser := workflowparser.NewNodeRequestParser(req)
+	if err := parser.Validate(); err != nil {
+		logger.Error("SemanticCache", "Invalid request: %v", err)
+		h.sendErrorReply(ctx, msg, err.Error(), parser.GetIdentity())
+		msg.Term()
+		return
+	}
+
+	t, a, j := parser.ExtractIdentity()
+	jobNameID := parser.GetJobNameId()
 
 	natsutil.LogJetStreamEvent(natsutil.JetStreamLogEvent{
 		Component: "SemanticCache",
@@ -120,8 +135,8 @@ func (h *JetStreamHandler) handleMessage(msg jetstream.Msg) {
 	})
 
 	if err == nil && meta.NumDelivered > 5 {
-		logger.Info("SemanticCache", "Message exceeded max delivery attempts, terminating")
-		h.sendErrorReply(ctx, msg, "Action failed after multiple retries due to rate limits.", req.Identity)
+		logger.Info("SemanticCache", "Message exceeded max delivery attempts, terminating (job_name_id: %d)", jobNameID)
+		h.sendErrorReply(ctx, msg, "Action failed after multiple retries due to rate limits.", parser.GetIdentity())
 		natsutil.LogJetStreamEvent(natsutil.JetStreamLogEvent{
 			Component:  "SemanticCache",
 			Event:      "TERMINATED",
@@ -170,45 +185,25 @@ func (h *JetStreamHandler) handleMessage(msg jetstream.Msg) {
 		}
 	}()
 
-	logger.Info("SemanticCache", "Received action request on subject: %s", subject)
+	logger.Info("SemanticCache", "Received action request on subject: %s (job_name_id: %d)", subject, jobNameID)
 
-	if req.NodeConfig == nil || req.NodeConfig.Cache == nil {
-		if err := h.sendErrorReply(ctx, msg, "missing NodeConfig or Cache config", req.Identity); err != nil {
+	cacheConfig := parser.GetCacheContract()
+	if cacheConfig == nil || parser.GetNodeName() == "" {
+		if err := h.sendErrorReply(ctx, msg, "missing NodeConfig or Cache config", parser.GetIdentity()); err != nil {
 			logger.Error("SemanticCache", "Failed to send error reply: %v", err)
-			msg.NakWithDelay(5 * time.Second)
-			return
 		}
-		durationMs := time.Since(startTime).Milliseconds()
-		msg.Ack()
-		natsutil.LogJetStreamEvent(natsutil.JetStreamLogEvent{
-			Component:  "SemanticCache",
-			Event:      "ACKNOWLEDGED",
-			Stream:     "WORKERS",
-			Subject:    subject,
-			Consumer:   "semantic_cache_service_consumer",
-			TenantID:   t,
-			AppID:      a,
-			JobID:      j,
-			Attempt:    attempt,
-			DurationMs: durationMs,
-		})
+		msg.Term()
 		return
 	}
 
-	cacheConfig := req.NodeConfig.Cache
 	metadata := make(map[string]any)
-	for k, v := range cacheConfig.Metadata {
+	for k, v := range parser.GetMetadata() {
 		metadata[k] = v
-	}
-	if req.Identity != nil {
-		metadata["tenant_id"] = req.Identity.TenantId
-		metadata["app_id"] = req.Identity.AppId
-		metadata["job_id"] = req.Identity.JobId
 	}
 
 	if subject == "worker.cache.lookup" {
 		// Cache Lookup
-		hit, payload, confidence, err := h.app.CheckCache(ctx, cacheConfig.CollectionName, cacheConfig.LookupInput, metadata, cacheConfig.ConfidenceThreshold)
+		hit, payload, confidence, err := h.app.CheckCache(ctx, cacheConfig.CollectionName, cacheConfig.LookupInput, req.Identity, metadata, cacheConfig.Confidence)
 		if err != nil {
 			logger.Error("SemanticCache", "CheckCache failed: %v", err)
 			h.sendErrorReply(ctx, msg, fmt.Sprintf("CheckCache failed: %v", err), req.Identity)
@@ -257,8 +252,16 @@ func (h *JetStreamHandler) handleMessage(msg jetstream.Msg) {
 		})
 
 	} else if subject == "worker.cache.background.update" {
+		payloadToStore := req.NodeOutputJson
+		if payloadToStore == "" {
+			logger.Error("SemanticCache", "StoreExtraction failed: missing NodeOutputJson in request")
+			h.sendErrorReply(ctx, msg, "missing NodeOutputJson for cache update", req.Identity)
+			msg.Term()
+			return
+		}
+
 		// Cache Update
-		err := h.app.StoreExtraction(ctx, cacheConfig.CollectionName, cacheConfig.LookupInput, metadata, "blank_document")
+		err := h.app.StoreExtraction(ctx, cacheConfig.CollectionName, cacheConfig.LookupInput, req.Identity, metadata, payloadToStore)
 		if err != nil {
 			logger.Error("SemanticCache", "StoreExtraction failed: %v", err)
 			h.sendErrorReply(ctx, msg, fmt.Sprintf("StoreExtraction failed: %v", err), req.Identity)

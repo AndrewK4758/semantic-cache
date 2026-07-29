@@ -4,6 +4,7 @@ import (
 	"context"
 	"fmt"
 
+	docpb "github.com/AndrewK4758/shared_protos"
 	"github.com/doc_processor/semantic_cache_service/internal/domain"
 	pb "github.com/qdrant/go-client/qdrant"
 	"google.golang.org/grpc"
@@ -39,33 +40,51 @@ func (c *Client) Close() {
 	}
 }
 
+func buildConditions(identity *docpb.InfrastructureIdentity, metadata map[string]any) []*pb.Condition {
+	var conditions []*pb.Condition
+
+	if identity != nil {
+		if identity.TenantId != "" {
+			conditions = append(conditions, makeKeywordCondition("tenant_id", identity.TenantId))
+		}
+		if identity.AppId != "" {
+			conditions = append(conditions, makeKeywordCondition("app_id", identity.AppId))
+		}
+		if identity.JobId != "" {
+			conditions = append(conditions, makeKeywordCondition("job_id", identity.JobId))
+		}
+	}
+
+	for k, v := range metadata {
+		if strVal, ok := v.(string); ok {
+			conditions = append(conditions, makeKeywordCondition(k, strVal))
+		}
+	}
+	return conditions
+}
+
+func makeKeywordCondition(key, val string) *pb.Condition {
+	return &pb.Condition{
+		ConditionOneOf: &pb.Condition_Field{
+			Field: &pb.FieldCondition{
+				Key: key,
+				Match: &pb.Match{
+					MatchValue: &pb.Match_Keyword{
+						Keyword: val,
+					},
+				},
+			},
+		},
+	}
+}
+
 // Search implements the domain.VectorStore interface.
-func (c *Client) Search(ctx context.Context, collectionName string, vector []float32, metadata map[string]any, limit int) ([]domain.SearchResult, error) {
+func (c *Client) Search(ctx context.Context, collectionName string, vector []float32, identity *docpb.InfrastructureIdentity, metadata map[string]any, limit int) ([]domain.SearchResult, error) {
 	if collectionName == "" {
 		collectionName = c.defaultCollection
 	}
 
-	// Construct the metadata filters
-	var conditions []*pb.Condition
-	for k, v := range metadata {
-		if strVal, ok := v.(string); ok {
-			conditions = append(conditions, &pb.Condition{
-				ConditionOneOf: &pb.Condition_Field{
-					Field: &pb.FieldCondition{
-						Key: k,
-						Match: &pb.Match{
-							MatchValue: &pb.Match_Keyword{
-								Keyword: strVal,
-							},
-						},
-					},
-				},
-			})
-		}
-		// In a real application, you'd map arrays or other JSON types into Qdrant Conditions.
-		// For simplicity, we just handle strings, since that covers our immediate use case.
-	}
-
+	conditions := buildConditions(identity, metadata)
 	filter := &pb.Filter{
 		Must: conditions,
 	}
@@ -95,10 +114,26 @@ func (c *Client) Search(ctx context.Context, collectionName string, vector []flo
 		}
 
 		resultMetadata := make(map[string]any)
+		var recordIdentity *docpb.InfrastructureIdentity
 		for k, v := range point.Payload {
-			if k != "json_payload" {
-				resultMetadata[k] = v.GetStringValue() // we can decode other types from qdrant if needed
+			if k == "tenant_id" || k == "app_id" || k == "job_id" {
+				if recordIdentity == nil {
+					recordIdentity = &docpb.InfrastructureIdentity{}
+				}
+				switch k {
+				case "tenant_id":
+					recordIdentity.TenantId = v.GetStringValue()
+				case "app_id":
+					recordIdentity.AppId = v.GetStringValue()
+				case "job_id":
+					recordIdentity.JobId = v.GetStringValue()
+				}
+			} else if k != "json_payload" {
+				resultMetadata[k] = v.GetStringValue()
 			}
+		}
+		if recordIdentity == nil {
+			recordIdentity = identity
 		}
 
 		// Extract ID
@@ -112,6 +147,7 @@ func (c *Client) Search(ctx context.Context, collectionName string, vector []flo
 		results = append(results, domain.SearchResult{
 			Record: domain.CacheRecord{
 				ID:          idStr,
+				Identity:    recordIdentity,
 				Metadata:    resultMetadata,
 				Vector:      vector,
 				JSONPayload: payloadStr,
@@ -145,6 +181,18 @@ func (c *Client) Upsert(ctx context.Context, collectionName string, record domai
 		"json_payload": {
 			Kind: &pb.Value_StringValue{StringValue: record.JSONPayload},
 		},
+	}
+
+	if record.Identity != nil {
+		if record.Identity.TenantId != "" {
+			payload["tenant_id"] = &pb.Value{Kind: &pb.Value_StringValue{StringValue: record.Identity.TenantId}}
+		}
+		if record.Identity.AppId != "" {
+			payload["app_id"] = &pb.Value{Kind: &pb.Value_StringValue{StringValue: record.Identity.AppId}}
+		}
+		if record.Identity.JobId != "" {
+			payload["job_id"] = &pb.Value{Kind: &pb.Value_StringValue{StringValue: record.Identity.JobId}}
+		}
 	}
 
 	for k, v := range record.Metadata {
@@ -185,31 +233,14 @@ func (c *Client) Upsert(ctx context.Context, collectionName string, record domai
 }
 
 // CheckMetadata implements the domain.VectorStore interface.
-func (c *Client) CheckMetadata(ctx context.Context, collectionName string, metadata map[string]any) (bool, error) {
+func (c *Client) CheckMetadata(ctx context.Context, collectionName string, identity *docpb.InfrastructureIdentity, metadata map[string]any) (bool, error) {
 	if collectionName == "" {
 		collectionName = c.defaultCollection
 	}
 
-	var conditions []*pb.Condition
-	for k, v := range metadata {
-		if strVal, ok := v.(string); ok {
-			conditions = append(conditions, &pb.Condition{
-				ConditionOneOf: &pb.Condition_Field{
-					Field: &pb.FieldCondition{
-						Key: k,
-						Match: &pb.Match{
-							MatchValue: &pb.Match_Keyword{
-								Keyword: strVal,
-							},
-						},
-					},
-				},
-			})
-		}
-	}
-
+	conditions := buildConditions(identity, metadata)
 	if len(conditions) == 0 {
-		return false, fmt.Errorf("no valid metadata provided for CheckMetadata")
+		return false, fmt.Errorf("no valid metadata or identity provided for CheckMetadata")
 	}
 
 	filter := &pb.Filter{
@@ -245,31 +276,14 @@ func (c *Client) CheckMetadata(ctx context.Context, collectionName string, metad
 }
 
 // GetByMetadata implements the domain.VectorStore interface.
-func (c *Client) GetByMetadata(ctx context.Context, collectionName string, metadata map[string]any) ([]domain.SearchResult, error) {
+func (c *Client) GetByMetadata(ctx context.Context, collectionName string, identity *docpb.InfrastructureIdentity, metadata map[string]any) ([]domain.SearchResult, error) {
 	if collectionName == "" {
 		collectionName = c.defaultCollection
 	}
 
-	var conditions []*pb.Condition
-	for k, v := range metadata {
-		if strVal, ok := v.(string); ok {
-			conditions = append(conditions, &pb.Condition{
-				ConditionOneOf: &pb.Condition_Field{
-					Field: &pb.FieldCondition{
-						Key: k,
-						Match: &pb.Match{
-							MatchValue: &pb.Match_Keyword{
-								Keyword: strVal,
-							},
-						},
-					},
-				},
-			})
-		}
-	}
-
+	conditions := buildConditions(identity, metadata)
 	if len(conditions) == 0 {
-		return nil, fmt.Errorf("no valid metadata provided for GetByMetadata")
+		return nil, fmt.Errorf("no valid metadata or identity provided for GetByMetadata")
 	}
 
 	filter := &pb.Filter{
@@ -305,10 +319,26 @@ func (c *Client) GetByMetadata(ctx context.Context, collectionName string, metad
 		}
 
 		resultMetadata := make(map[string]any)
+		var recordIdentity *docpb.InfrastructureIdentity
 		for k, v := range point.Payload {
-			if k != "json_payload" {
+			if k == "tenant_id" || k == "app_id" || k == "job_id" {
+				if recordIdentity == nil {
+					recordIdentity = &docpb.InfrastructureIdentity{}
+				}
+				switch k {
+				case "tenant_id":
+					recordIdentity.TenantId = v.GetStringValue()
+				case "app_id":
+					recordIdentity.AppId = v.GetStringValue()
+				case "job_id":
+					recordIdentity.JobId = v.GetStringValue()
+				}
+			} else if k != "json_payload" {
 				resultMetadata[k] = v.GetStringValue()
 			}
+		}
+		if recordIdentity == nil {
+			recordIdentity = identity
 		}
 
 		idStr := ""
@@ -321,6 +351,7 @@ func (c *Client) GetByMetadata(ctx context.Context, collectionName string, metad
 		results = append(results, domain.SearchResult{
 			Record: domain.CacheRecord{
 				ID:          idStr,
+				Identity:    recordIdentity,
 				Metadata:    resultMetadata,
 				Vector:      nil, // No vector retrieved
 				JSONPayload: payloadStr,

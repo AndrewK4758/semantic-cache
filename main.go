@@ -22,16 +22,16 @@ import (
 )
 
 func main() {
-	// Attempt to load .env, but ignore error if it doesn't exist
+	// Attempt to load .env but ignore error if it doesn't exist
 	envutil.LoadEnv(".env", "semantic_cache_service/.env", "../.env", "../../.env")
 	logger.InitLogger()
 
 	// Configuration
 	grpcPort := getEnv("GRPC_PORT", "50055")
 	qdrantAddr := getEnv("QDRANT_URL", "localhost:6334")
-	openaiURL := getEnv("OPENAI_BASE_URL", "http://localhost:11434/v1")
-	openaiModel := envutil.GetEmbeddingModel("all-minilm:latest")
-	collectionName := getEnv("QDRANT_COLLECTION", "incoming_email_templates")
+	openaiURL := getEnv("EMBEDDING_BASE_URL", getEnv("OPENAI_BASE_URL", "http://localhost:11434/v1"))
+	openaiModel := envutil.GetEmbeddingModel()
+	collectionName := getEnv("QDRANT_COLLECTION", "default_cache")
 
 	// Infrastructure
 	openaiClient := openai.NewClient(openaiURL, openaiModel)

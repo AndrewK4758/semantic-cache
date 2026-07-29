@@ -7,6 +7,7 @@ import (
 	"fmt"
 	"strings"
 
+	pb "github.com/AndrewK4758/shared_protos"
 	"github.com/AndrewK4758/shared_utils/logger"
 	"github.com/doc_processor/semantic_cache_service/internal/domain"
 )
@@ -26,16 +27,18 @@ func NewSemanticCacheApp(embedder domain.EmbeddingService, store domain.VectorSt
 }
 
 // CheckCache processes the Check Cache use case.
-func (a *SemanticCacheApp) CheckCache(ctx context.Context, collectionName string, text string, metadata map[string]any, threshold float32) (hit bool, extractedPayload string, confidence float32, err error) {
+func (a *SemanticCacheApp) CheckCache(ctx context.Context, collectionName string, text string, identity *pb.InfrastructureIdentity, metadata map[string]any, threshold float32) (hit bool, extractedPayload string, confidence float32, err error) {
 	logger.Info("SemanticCache", "INFO: [SemanticCacheApp] CheckCache invoked. Collection: %s, Input Text Length: %d, Threshold: %.2f", collectionName, len(text), threshold)
+	logger.Info("SemanticCache", "INFO: [SemanticCacheApp] Query Input:\n%s", text)
 
 	// TIER 1: EXACT METADATA MATCH (Bypass LLM)
-	if len(metadata) > 0 {
+	if len(metadata) > 0 || identity != nil {
 		logger.Info("SemanticCache", "INFO: [SemanticCacheApp] TIER 1: Attempting Exact Metadata Match...")
-		metaResults, err := a.store.GetByMetadata(ctx, collectionName, metadata)
+		metaResults, err := a.store.GetByMetadata(ctx, collectionName, identity, metadata)
 		if err == nil && len(metaResults) > 0 {
 			topMatch := metaResults[0]
 			logger.Info("SemanticCache", "INFO: [SemanticCacheApp] CACHE HIT [METADATA_EXACT_MATCH]! Bypassing embedding generation.")
+			logger.Info("SemanticCache", "INFO: [SemanticCacheApp] Cached Payload Output:\n%s", topMatch.Record.JSONPayload)
 			return true, topMatch.Record.JSONPayload, topMatch.Score, nil
 		}
 		logger.Info("SemanticCache", "INFO: [SemanticCacheApp] TIER 1 Miss: No exact metadata match found. Proceeding to Semantic Fallback.")
@@ -51,7 +54,7 @@ func (a *SemanticCacheApp) CheckCache(ctx context.Context, collectionName string
 	logger.Info("SemanticCache", "INFO: [SemanticCacheApp] Successfully generated embedding vector of length %d", len(vector))
 
 	logger.Info("SemanticCache", "INFO: [SemanticCacheApp] Searching Qdrant Vector Store for top 1 match...")
-	results, err := a.store.Search(ctx, collectionName, vector, nil, 1) // Do not filter semantic search by metadata, allow broad semantic matching
+	results, err := a.store.Search(ctx, collectionName, vector, identity, nil, 1) // Pass identity filter for tenant/app isolation if available
 	if err != nil {
 		logger.Info("SemanticCache", "ERROR: [SemanticCacheApp] Failed to search vector store: %v", err)
 		return false, "", 0, fmt.Errorf("action failed for job CheckCache: vector search error: %w", err)
@@ -62,6 +65,7 @@ func (a *SemanticCacheApp) CheckCache(ctx context.Context, collectionName string
 		logger.Info("SemanticCache", "INFO: [SemanticCacheApp] Vector search returned top match with Cosine Similarity Score: %.4f (Threshold: %.2f)", topMatch.Score, threshold)
 		if topMatch.Score >= threshold {
 			logger.Info("SemanticCache", "INFO: [SemanticCacheApp] CACHE HIT [SEMANTIC_SIMILARITY]! Score %.4f exceeds threshold. Returning cached payload.", topMatch.Score)
+			logger.Info("SemanticCache", "INFO: [SemanticCacheApp] Cached Payload Output:\n%s", topMatch.Record.JSONPayload)
 			return true, topMatch.Record.JSONPayload, topMatch.Score, nil
 		}
 		logger.Info("SemanticCache", "INFO: [SemanticCacheApp] CACHE MISS. Score %.4f is below threshold %.2f.", topMatch.Score, threshold)
@@ -73,7 +77,7 @@ func (a *SemanticCacheApp) CheckCache(ctx context.Context, collectionName string
 }
 
 // StoreExtraction processes the Store Extraction use case.
-func (a *SemanticCacheApp) StoreExtraction(ctx context.Context, collectionName string, text string, metadata map[string]any, extractedPayload string) error {
+func (a *SemanticCacheApp) StoreExtraction(ctx context.Context, collectionName string, text string, identity *pb.InfrastructureIdentity, metadata map[string]any, extractedPayload string) error {
 	logger.Info("SemanticCache", "INFO: [SemanticCacheApp] StoreExtraction invoked. Collection: %s, Input Text Length: %d, Payload Length: %d", collectionName, len(text), len(extractedPayload))
 
 	logger.Info("SemanticCache", "INFO: [SemanticCacheApp] Generating embedding for input text to store...")
@@ -83,9 +87,12 @@ func (a *SemanticCacheApp) StoreExtraction(ctx context.Context, collectionName s
 		return fmt.Errorf("action failed for job StoreExtraction: embedding generation error: %w", err)
 	}
 
-	// Generate a deterministic ID based on text and metadata
+	// Generate a deterministic ID based on text, identity, and metadata
 	var hashStr strings.Builder
 	hashStr.WriteString(text)
+	if identity != nil {
+		hashStr.WriteString(fmt.Sprintf("t:%s|a:%s|j:%s|", identity.TenantId, identity.AppId, identity.JobId))
+	}
 	for k, v := range metadata {
 		hashStr.WriteString(fmt.Sprintf("%s:%v|", k, v))
 	}
@@ -95,6 +102,7 @@ func (a *SemanticCacheApp) StoreExtraction(ctx context.Context, collectionName s
 
 	record := domain.CacheRecord{
 		ID:          recordID,
+		Identity:    identity,
 		Metadata:    metadata,
 		Vector:      vector,
 		JSONPayload: extractedPayload,
@@ -111,10 +119,10 @@ func (a *SemanticCacheApp) StoreExtraction(ctx context.Context, collectionName s
 }
 
 // CheckMetadata processes the pure metadata existence check use case.
-func (a *SemanticCacheApp) CheckMetadata(ctx context.Context, collectionName string, metadata map[string]any) (bool, error) {
+func (a *SemanticCacheApp) CheckMetadata(ctx context.Context, collectionName string, identity *pb.InfrastructureIdentity, metadata map[string]any) (bool, error) {
 	logger.Info("SemanticCache", "INFO: [SemanticCacheApp] CheckMetadata invoked. Collection: %s, Metadata fields: %d", collectionName, len(metadata))
 
-	exists, err := a.store.CheckMetadata(ctx, collectionName, metadata)
+	exists, err := a.store.CheckMetadata(ctx, collectionName, identity, metadata)
 	if err != nil {
 		logger.Info("SemanticCache", "ERROR: [SemanticCacheApp] Failed to check metadata: %v", err)
 		return false, fmt.Errorf("action failed for job CheckMetadata: vector store check error: %w", err)

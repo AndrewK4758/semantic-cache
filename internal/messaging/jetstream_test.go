@@ -2,10 +2,13 @@ package messaging
 
 import (
 	"context"
+	"sync"
 	"testing"
 	"time"
 
 	pb "github.com/AndrewK4758/shared_protos"
+	"github.com/doc_processor/semantic_cache_service/internal/application"
+	"github.com/doc_processor/semantic_cache_service/internal/domain"
 	"github.com/nats-io/nats.go"
 	"github.com/nats-io/nats.go/jetstream"
 	"google.golang.org/protobuf/proto"
@@ -123,8 +126,8 @@ func TestHandleMessage_MissingNodeConfig_AcksMessage(t *testing.T) {
 
 	handler.handleMessage(msg)
 
-	if !msg.acked {
-		t.Fatalf("Expected msg.Ack() to be called when NodeConfig is missing, but it was not")
+	if !msg.termed {
+		t.Fatalf("Expected msg.Term() to be called when NodeConfig is missing, but it was not")
 	}
 }
 
@@ -137,11 +140,13 @@ func TestHandleMessage_UnknownSubject_AcksMessage(t *testing.T) {
 			TenantId: "t1",
 			AppId:    "a1",
 		},
+		StepId: "step-unknown",
 		NodeConfig: &pb.NodeConfiguration{
-			Cache: &pb.CacheConfiguration{
-				CollectionName: "test_coll",
-				LookupInput:    "test_input",
-			},
+			NodeName: "Test Node",
+		},
+		Cache: &pb.CacheContract{
+			CollectionName: "test_coll",
+			LookupInput:    "test_input",
 		},
 	}
 	data, _ := proto.Marshal(req)
@@ -158,3 +163,146 @@ func TestHandleMessage_UnknownSubject_AcksMessage(t *testing.T) {
 		t.Fatalf("Expected msg.Ack() to be called for unknown subject, but it was not")
 	}
 }
+
+func TestHandleMessage_MissingCacheContract_AcksMessage(t *testing.T) {
+	handler := &JetStreamHandler{}
+
+	req := &pb.ExecuteWorkflowNodeRequest{
+		Identity: &pb.InfrastructureIdentity{
+			JobId:    "job-missing-cache",
+			TenantId: "t1",
+			AppId:    "a1",
+		},
+		StepId: "step-1",
+		NodeConfig: &pb.NodeConfiguration{
+			NodeName: "Test Node",
+		},
+		Cache: nil,
+	}
+	data, _ := proto.Marshal(req)
+
+	msg := &mockCacheMsg{
+		data:     data,
+		subject:  "worker.cache.lookup",
+		numDeliv: 1,
+	}
+
+	handler.handleMessage(msg)
+
+	if !msg.termed {
+		t.Fatalf("Expected msg.Term() to be called when Cache contract is missing, but it was not")
+	}
+}
+
+type mockEmbedder struct{}
+
+func (m *mockEmbedder) Generate(ctx context.Context, text string) ([]float32, error) {
+	return []float32{0.1, 0.2, 0.3}, nil
+}
+
+type mockStore struct {
+	mu           sync.Mutex
+	storedRecord domain.CacheRecord
+}
+
+func (m *mockStore) Search(ctx context.Context, collectionName string, vector []float32, identity *pb.InfrastructureIdentity, metadata map[string]any, limit int) ([]domain.SearchResult, error) {
+	return []domain.SearchResult{
+		{
+			Record: domain.CacheRecord{JSONPayload: `{"cached":true}`},
+			Score:  0.99,
+		},
+	}, nil
+}
+
+func (m *mockStore) Upsert(ctx context.Context, collectionName string, record domain.CacheRecord) error {
+	m.mu.Lock()
+	defer m.mu.Unlock()
+	m.storedRecord = record
+	return nil
+}
+
+func (m *mockStore) CheckMetadata(ctx context.Context, collectionName string, identity *pb.InfrastructureIdentity, metadata map[string]any) (bool, error) {
+	return true, nil
+}
+
+func (m *mockStore) GetByMetadata(ctx context.Context, collectionName string, identity *pb.InfrastructureIdentity, metadata map[string]any) ([]domain.SearchResult, error) {
+	return nil, nil
+}
+
+func TestHandleMessage_BackgroundUpdatePayloadExtraction(t *testing.T) {
+	embedMock := &mockEmbedder{}
+	storeMock := &mockStore{}
+	app := application.NewSemanticCacheApp(embedMock, storeMock)
+	handler := &JetStreamHandler{app: app}
+
+	t.Run("Extract payload from NodeOutput", func(t *testing.T) {
+		req := &pb.ExecuteWorkflowNodeRequest{
+			Identity:       &pb.InfrastructureIdentity{JobId: "job1", TenantId: "t1", AppId: "a1"},
+			NodeConfig:     &pb.NodeConfiguration{NodeName: "test"},
+			Cache:          &pb.CacheContract{CollectionName: "test_coll", LookupInput: "fallback_text"},
+			NodeOutputJson: `{"extracted_key":"val1"}`,
+		}
+		data, _ := proto.Marshal(req)
+		msg := &mockCacheMsg{data: data, subject: "worker.cache.background.update", numDeliv: 1}
+
+		handler.handleMessage(msg)
+
+		if !msg.acked {
+			t.Fatal("expected msg to be acked")
+		}
+	})
+
+	t.Run("Fails fast when NodeOutput is empty", func(t *testing.T) {
+		req := &pb.ExecuteWorkflowNodeRequest{
+			Identity:   &pb.InfrastructureIdentity{JobId: "job1", TenantId: "t1", AppId: "a1"},
+			NodeConfig: &pb.NodeConfiguration{NodeName: "test"},
+			Cache:      &pb.CacheContract{CollectionName: "test_coll", LookupInput: "fallback_text"},
+		}
+		data, _ := proto.Marshal(req)
+		msg := &mockCacheMsg{data: data, subject: "worker.cache.background.update", numDeliv: 1}
+
+		handler.handleMessage(msg)
+
+		if !msg.termed {
+			t.Fatal("expected msg to be termed due to missing NodeOutputJson")
+		}
+	})
+}
+
+func TestHandleMessage_ConcurrentStressTest(t *testing.T) {
+	embedMock := &mockEmbedder{}
+	storeMock := &mockStore{}
+	app := application.NewSemanticCacheApp(embedMock, storeMock)
+	handler := &JetStreamHandler{app: app}
+
+	req := &pb.ExecuteWorkflowNodeRequest{
+		Identity: &pb.InfrastructureIdentity{JobId: "job-stress", TenantId: "t-stress", AppId: "a-stress"},
+		NodeConfig: &pb.NodeConfiguration{NodeName: "stress_node"},
+		Cache:      &pb.CacheContract{CollectionName: "stress_coll", LookupInput: "stress_input", Confidence: 0.8},
+		NodeOutputJson: `{"stress":true}`,
+	}
+	data, _ := proto.Marshal(req)
+
+	const goroutines = 50
+	done := make(chan bool, goroutines)
+
+	for i := 0; i < goroutines; i++ {
+		go func(id int) {
+			subj := "worker.cache.lookup"
+			if id%2 == 0 {
+				subj = "worker.cache.background.update"
+			}
+			msg := &mockCacheMsg{data: data, subject: subj, numDeliv: 1}
+			handler.handleMessage(msg)
+			if !msg.acked {
+				t.Errorf("goroutine %d: msg not acked", id)
+			}
+			done <- true
+		}(i)
+	}
+
+	for i := 0; i < goroutines; i++ {
+		<-done
+	}
+}
+

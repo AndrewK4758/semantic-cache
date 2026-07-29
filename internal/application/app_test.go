@@ -5,6 +5,7 @@ import (
 	"errors"
 	"testing"
 
+	pb "github.com/AndrewK4758/shared_protos"
 	"github.com/doc_processor/semantic_cache_service/internal/application"
 	"github.com/doc_processor/semantic_cache_service/internal/domain"
 )
@@ -23,15 +24,15 @@ func (m *mockEmbeddingService) Generate(ctx context.Context, text string) ([]flo
 }
 
 type mockVectorStore struct {
-	searchFn        func(ctx context.Context, collectionName string, vector []float32, metadata map[string]any, limit int) ([]domain.SearchResult, error)
+	searchFn        func(ctx context.Context, collectionName string, vector []float32, identity *pb.InfrastructureIdentity, metadata map[string]any, limit int) ([]domain.SearchResult, error)
 	upsertFn        func(ctx context.Context, collectionName string, record domain.CacheRecord) error
-	checkMetadataFn func(ctx context.Context, collectionName string, metadata map[string]any) (bool, error)
-	getByMetadataFn func(ctx context.Context, collectionName string, metadata map[string]any) ([]domain.SearchResult, error)
+	checkMetadataFn func(ctx context.Context, collectionName string, identity *pb.InfrastructureIdentity, metadata map[string]any) (bool, error)
+	getByMetadataFn func(ctx context.Context, collectionName string, identity *pb.InfrastructureIdentity, metadata map[string]any) ([]domain.SearchResult, error)
 }
 
-func (m *mockVectorStore) Search(ctx context.Context, collectionName string, vector []float32, metadata map[string]any, limit int) ([]domain.SearchResult, error) {
+func (m *mockVectorStore) Search(ctx context.Context, collectionName string, vector []float32, identity *pb.InfrastructureIdentity, metadata map[string]any, limit int) ([]domain.SearchResult, error) {
 	if m.searchFn != nil {
-		return m.searchFn(ctx, collectionName, vector, metadata, limit)
+		return m.searchFn(ctx, collectionName, vector, identity, metadata, limit)
 	}
 	return nil, nil
 }
@@ -43,16 +44,16 @@ func (m *mockVectorStore) Upsert(ctx context.Context, collectionName string, rec
 	return nil
 }
 
-func (m *mockVectorStore) CheckMetadata(ctx context.Context, collectionName string, metadata map[string]any) (bool, error) {
+func (m *mockVectorStore) CheckMetadata(ctx context.Context, collectionName string, identity *pb.InfrastructureIdentity, metadata map[string]any) (bool, error) {
 	if m.checkMetadataFn != nil {
-		return m.checkMetadataFn(ctx, collectionName, metadata)
+		return m.checkMetadataFn(ctx, collectionName, identity, metadata)
 	}
 	return false, nil
 }
 
-func (m *mockVectorStore) GetByMetadata(ctx context.Context, collectionName string, metadata map[string]any) ([]domain.SearchResult, error) {
+func (m *mockVectorStore) GetByMetadata(ctx context.Context, collectionName string, identity *pb.InfrastructureIdentity, metadata map[string]any) ([]domain.SearchResult, error) {
 	if m.getByMetadataFn != nil {
-		return m.getByMetadataFn(ctx, collectionName, metadata)
+		return m.getByMetadataFn(ctx, collectionName, identity, metadata)
 	}
 	return nil, nil
 }
@@ -68,8 +69,8 @@ func TestSemanticCacheApp_CheckCache(t *testing.T) {
 	tests := []struct {
 		name               string
 		embedFn            func(ctx context.Context, text string) ([]float32, error)
-		searchFn           func(ctx context.Context, collectionName string, vector []float32, metadata map[string]any, limit int) ([]domain.SearchResult, error)
-		getByMetadataFn    func(ctx context.Context, collectionName string, metadata map[string]any) ([]domain.SearchResult, error)
+		searchFn           func(ctx context.Context, collectionName string, vector []float32, identity *pb.InfrastructureIdentity, metadata map[string]any, limit int) ([]domain.SearchResult, error)
+		getByMetadataFn    func(ctx context.Context, collectionName string, identity *pb.InfrastructureIdentity, metadata map[string]any) ([]domain.SearchResult, error)
 		args               args
 		expectedHit        bool
 		expectedPayload    string
@@ -78,7 +79,7 @@ func TestSemanticCacheApp_CheckCache(t *testing.T) {
 	}{
 		{
 			name: "Tier 1: Cache Hit (Exact Metadata Match)",
-			getByMetadataFn: func(ctx context.Context, collectionName string, metadata map[string]any) ([]domain.SearchResult, error) {
+			getByMetadataFn: func(ctx context.Context, collectionName string, identity *pb.InfrastructureIdentity, metadata map[string]any) ([]domain.SearchResult, error) {
 				return []domain.SearchResult{
 					{
 						Score: 1.0,
@@ -103,10 +104,10 @@ func TestSemanticCacheApp_CheckCache(t *testing.T) {
 		},
 		{
 			name: "Tier 1: Resiliency - Qdrant Metadata Error Fallback",
-			getByMetadataFn: func(ctx context.Context, collectionName string, metadata map[string]any) ([]domain.SearchResult, error) {
+			getByMetadataFn: func(ctx context.Context, collectionName string, identity *pb.InfrastructureIdentity, metadata map[string]any) ([]domain.SearchResult, error) {
 				return nil, errors.New("qdrant scroll offline")
 			},
-			searchFn: func(ctx context.Context, collectionName string, vector []float32, metadata map[string]any, limit int) ([]domain.SearchResult, error) {
+			searchFn: func(ctx context.Context, collectionName string, vector []float32, identity *pb.InfrastructureIdentity, metadata map[string]any, limit int) ([]domain.SearchResult, error) {
 				return []domain.SearchResult{
 					{
 						Score: 0.95,
@@ -128,7 +129,7 @@ func TestSemanticCacheApp_CheckCache(t *testing.T) {
 		},
 		{
 			name: "Cache Hit - Score exceeds threshold",
-			searchFn: func(ctx context.Context, collectionName string, vector []float32, metadata map[string]any, limit int) ([]domain.SearchResult, error) {
+			searchFn: func(ctx context.Context, collectionName string, vector []float32, identity *pb.InfrastructureIdentity, metadata map[string]any, limit int) ([]domain.SearchResult, error) {
 				return []domain.SearchResult{
 					{
 						Score: 0.95,
@@ -150,7 +151,7 @@ func TestSemanticCacheApp_CheckCache(t *testing.T) {
 		},
 		{
 			name: "Cache Miss - Score below threshold",
-			searchFn: func(ctx context.Context, collectionName string, vector []float32, metadata map[string]any, limit int) ([]domain.SearchResult, error) {
+			searchFn: func(ctx context.Context, collectionName string, vector []float32, identity *pb.InfrastructureIdentity, metadata map[string]any, limit int) ([]domain.SearchResult, error) {
 				return []domain.SearchResult{
 					{
 						Score: 0.85,
@@ -172,7 +173,7 @@ func TestSemanticCacheApp_CheckCache(t *testing.T) {
 		},
 		{
 			name: "Success - Cache Miss (No Results)",
-			searchFn: func(ctx context.Context, collectionName string, vector []float32, metadata map[string]any, limit int) ([]domain.SearchResult, error) {
+			searchFn: func(ctx context.Context, collectionName string, vector []float32, identity *pb.InfrastructureIdentity, metadata map[string]any, limit int) ([]domain.SearchResult, error) {
 				return []domain.SearchResult{}, nil
 			},
 			args: args{
@@ -199,7 +200,7 @@ func TestSemanticCacheApp_CheckCache(t *testing.T) {
 		},
 		{
 			name: "Error - Store search failure",
-			searchFn: func(ctx context.Context, collectionName string, vector []float32, metadata map[string]any, limit int) ([]domain.SearchResult, error) {
+			searchFn: func(ctx context.Context, collectionName string, vector []float32, identity *pb.InfrastructureIdentity, metadata map[string]any, limit int) ([]domain.SearchResult, error) {
 				return nil, errors.New("qdrant offline")
 			},
 			args: args{
@@ -217,7 +218,7 @@ func TestSemanticCacheApp_CheckCache(t *testing.T) {
 			storeMock := &mockVectorStore{searchFn: tt.searchFn, getByMetadataFn: tt.getByMetadataFn}
 			app := application.NewSemanticCacheApp(embedMock, storeMock)
 
-			hit, payload, conf, err := app.CheckCache(context.Background(), "test_collection", tt.args.text, tt.args.metadata, tt.args.threshold)
+			hit, payload, conf, err := app.CheckCache(context.Background(), "test_collection", tt.args.text, nil, tt.args.metadata, tt.args.threshold)
 
 			if (err != nil) != tt.expectError {
 				t.Fatalf("expected error: %v, got: %v", tt.expectError, err)
@@ -291,7 +292,7 @@ func TestSemanticCacheApp_StoreExtraction(t *testing.T) {
 			embedMock := &mockEmbeddingService{generateFn: tt.embedFn}
 			storeMock := &mockVectorStore{upsertFn: tt.upsertFn}
 			app := application.NewSemanticCacheApp(embedMock, storeMock)
-			err := app.StoreExtraction(context.Background(), "test_collection", tt.args.text, tt.args.metadata, tt.args.extractedPayload)
+			err := app.StoreExtraction(context.Background(), "test_collection", tt.args.text, nil, tt.args.metadata, tt.args.extractedPayload)
 
 			if (err != nil) != tt.expectError {
 				t.Fatalf("expected error: %v, got: %v", tt.expectError, err)
@@ -307,14 +308,14 @@ func TestSemanticCacheApp_CheckMetadata(t *testing.T) {
 	}
 	tests := []struct {
 		name            string
-		checkMetadataFn func(ctx context.Context, collectionName string, metadata map[string]any) (bool, error)
+		checkMetadataFn func(ctx context.Context, collectionName string, identity *pb.InfrastructureIdentity, metadata map[string]any) (bool, error)
 		args            args
 		expectedExists  bool
 		expectError     bool
 	}{
 		{
 			name: "Success - Metadata Exists",
-			checkMetadataFn: func(ctx context.Context, collectionName string, metadata map[string]any) (bool, error) {
+			checkMetadataFn: func(ctx context.Context, collectionName string, identity *pb.InfrastructureIdentity, metadata map[string]any) (bool, error) {
 				return true, nil
 			},
 			args: args{
@@ -326,7 +327,7 @@ func TestSemanticCacheApp_CheckMetadata(t *testing.T) {
 		},
 		{
 			name: "Success - Metadata Does Not Exist",
-			checkMetadataFn: func(ctx context.Context, collectionName string, metadata map[string]any) (bool, error) {
+			checkMetadataFn: func(ctx context.Context, collectionName string, identity *pb.InfrastructureIdentity, metadata map[string]any) (bool, error) {
 				return false, nil
 			},
 			args: args{
@@ -338,7 +339,7 @@ func TestSemanticCacheApp_CheckMetadata(t *testing.T) {
 		},
 		{
 			name: "Error - Vector Store Offline",
-			checkMetadataFn: func(ctx context.Context, collectionName string, metadata map[string]any) (bool, error) {
+			checkMetadataFn: func(ctx context.Context, collectionName string, identity *pb.InfrastructureIdentity, metadata map[string]any) (bool, error) {
 				return false, errors.New("qdrant offline")
 			},
 			args: args{
@@ -355,7 +356,7 @@ func TestSemanticCacheApp_CheckMetadata(t *testing.T) {
 			storeMock := &mockVectorStore{checkMetadataFn: tt.checkMetadataFn}
 			app := application.NewSemanticCacheApp(&mockEmbeddingService{}, storeMock)
 
-			exists, err := app.CheckMetadata(context.Background(), tt.args.collectionName, tt.args.metadata)
+			exists, err := app.CheckMetadata(context.Background(), tt.args.collectionName, nil, tt.args.metadata)
 
 			if (err != nil) != tt.expectError {
 				t.Fatalf("expected error: %v, got: %v", tt.expectError, err)
