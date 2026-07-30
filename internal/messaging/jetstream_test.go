@@ -11,7 +11,9 @@ import (
 	"github.com/doc_processor/semantic_cache_service/internal/domain"
 	"github.com/nats-io/nats.go"
 	"github.com/nats-io/nats.go/jetstream"
+	"google.golang.org/protobuf/encoding/protojson"
 	"google.golang.org/protobuf/proto"
+	"google.golang.org/protobuf/types/known/structpb"
 )
 
 type mockCacheMsg struct {
@@ -240,7 +242,7 @@ func TestHandleMessage_BackgroundUpdatePayloadExtraction(t *testing.T) {
 			Identity:       &pb.InfrastructureIdentity{JobId: "job1", TenantId: "t1", AppId: "a1"},
 			NodeConfig:     &pb.NodeConfiguration{NodeName: "test"},
 			Cache:          &pb.CacheContract{CollectionName: "test_coll", LookupInput: "fallback_text"},
-			NodeOutputJson: `{"extracted_key":"val1"}`,
+			NodeOutput: unmarshalStruct(`{"extracted_key":"val1"}`),
 		}
 		data, _ := proto.Marshal(req)
 		msg := &mockCacheMsg{data: data, subject: "worker.cache.background.update", numDeliv: 1}
@@ -264,7 +266,7 @@ func TestHandleMessage_BackgroundUpdatePayloadExtraction(t *testing.T) {
 		handler.handleMessage(msg)
 
 		if !msg.termed {
-			t.Fatal("expected msg to be termed due to missing NodeOutputJson")
+			t.Fatal("expected msg to be termed due to missing NodeOutput")
 		}
 	})
 }
@@ -279,7 +281,7 @@ func TestHandleMessage_ConcurrentStressTest(t *testing.T) {
 		Identity: &pb.InfrastructureIdentity{JobId: "job-stress", TenantId: "t-stress", AppId: "a-stress"},
 		NodeConfig: &pb.NodeConfiguration{NodeName: "stress_node"},
 		Cache:      &pb.CacheContract{CollectionName: "stress_coll", LookupInput: "stress_input", Confidence: 0.8},
-		NodeOutputJson: `{"stress":true}`,
+		NodeOutput: unmarshalStruct(`{"stress":true}`),
 	}
 	data, _ := proto.Marshal(req)
 
@@ -306,3 +308,11 @@ func TestHandleMessage_ConcurrentStressTest(t *testing.T) {
 	}
 }
 
+
+func unmarshalStruct(jsonStr string) *structpb.Struct {
+	var s structpb.Struct
+	if err := protojson.Unmarshal([]byte(jsonStr), &s); err != nil {
+		panic(err)
+	}
+	return &s
+}

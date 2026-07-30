@@ -16,7 +16,9 @@ import (
 	"github.com/nats-io/nats.go"
 	"github.com/nats-io/nats.go/jetstream"
 
+	"google.golang.org/protobuf/encoding/protojson"
 	"google.golang.org/protobuf/proto"
+	"google.golang.org/protobuf/types/known/structpb"
 )
 
 type JetStreamHandler struct {
@@ -60,7 +62,7 @@ func (h *JetStreamHandler) StartConsumers(ctx context.Context) error {
 
 	var cons jetstream.Consumer
 	var err error
-	for i := 0; i < 30; i++ {
+	for range 30 {
 		cons, err = h.js.CreateOrUpdateConsumer(ctx, "WORKERS", jetstream.ConsumerConfig{
 			Durable:        "semantic_cache_service_consumer",
 			AckPolicy:      jetstream.AckExplicitPolicy,
@@ -252,16 +254,24 @@ func (h *JetStreamHandler) handleMessage(msg jetstream.Msg) {
 		})
 
 	} else if subject == "worker.cache.background.update" {
-		payloadToStore := req.NodeOutputJson
-		if payloadToStore == "" {
-			logger.Error("SemanticCache", "StoreExtraction failed: missing NodeOutputJson in request")
-			h.sendErrorReply(ctx, msg, "missing NodeOutputJson for cache update", req.Identity)
+		if req.NodeOutput == nil {
+			logger.Error("SemanticCache", "StoreExtraction failed: missing NodeOutput in request")
+			h.sendErrorReply(ctx, msg, "missing NodeOutput for cache update", req.Identity)
 			msg.Term()
 			return
 		}
 
+		payloadBytes, err := protojson.Marshal(req.NodeOutput)
+		if err != nil {
+			logger.Error("SemanticCache", "StoreExtraction failed to marshal NodeOutput: %v", err)
+			h.sendErrorReply(ctx, msg, "failed to marshal NodeOutput", req.Identity)
+			msg.Term()
+			return
+		}
+		payloadToStore := string(payloadBytes)
+
 		// Cache Update
-		err := h.app.StoreExtraction(ctx, cacheConfig.CollectionName, cacheConfig.LookupInput, req.Identity, metadata, payloadToStore)
+		err = h.app.StoreExtraction(ctx, cacheConfig.CollectionName, cacheConfig.LookupInput, req.Identity, metadata, payloadToStore)
 		if err != nil {
 			logger.Error("SemanticCache", "StoreExtraction failed: %v", err)
 			h.sendErrorReply(ctx, msg, fmt.Sprintf("StoreExtraction failed: %v", err), req.Identity)
@@ -360,9 +370,16 @@ func (h *JetStreamHandler) sendSuccessReply(ctx context.Context, msg jetstream.M
 		return nil
 	}
 
+	// Convert the result JSON back to a Struct for the response
+	var resultStruct structpb.Struct
+	if err := protojson.Unmarshal([]byte(resultJson), &resultStruct); err != nil {
+		logger.Error("SemanticCache", "Failed to unmarshal result JSON into Struct: %v", err)
+		// Fallback to empty struct if unmarshal fails, or we could return error
+	}
+
 	resp := &pb.PerformActionResponse{
-		Success:          true,
-		ActionResultJson: resultJson,
+		Success:      true,
+		ActionResult: &resultStruct,
 	}
 	return h.publishReply(ctx, replySubj, resp, reqIdentity)
 }
