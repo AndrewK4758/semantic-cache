@@ -148,7 +148,6 @@ func TestHandleMessage_UnknownSubject_AcksMessage(t *testing.T) {
 		},
 		Cache: &pb.CacheContract{
 			CollectionName: "test_coll",
-			LookupInput:    "test_input",
 		},
 	}
 	data, _ := proto.Marshal(req)
@@ -241,7 +240,7 @@ func TestHandleMessage_BackgroundUpdatePayloadExtraction(t *testing.T) {
 		req := &pb.ExecuteWorkflowNodeRequest{
 			Identity:       &pb.InfrastructureIdentity{JobId: "job1", TenantId: "t1", AppId: "a1"},
 			NodeConfig:     &pb.NodeConfiguration{NodeName: "test"},
-			Cache:          &pb.CacheContract{CollectionName: "test_coll", LookupInput: "fallback_text"},
+			Cache:          &pb.CacheContract{CollectionName: "test_coll"},
 			NodeOutput: unmarshalStruct(`{"extracted_key":"val1"}`),
 		}
 		data, _ := proto.Marshal(req)
@@ -258,7 +257,7 @@ func TestHandleMessage_BackgroundUpdatePayloadExtraction(t *testing.T) {
 		req := &pb.ExecuteWorkflowNodeRequest{
 			Identity:   &pb.InfrastructureIdentity{JobId: "job1", TenantId: "t1", AppId: "a1"},
 			NodeConfig: &pb.NodeConfiguration{NodeName: "test"},
-			Cache:      &pb.CacheContract{CollectionName: "test_coll", LookupInput: "fallback_text"},
+			Cache:      &pb.CacheContract{CollectionName: "test_coll"},
 		}
 		data, _ := proto.Marshal(req)
 		msg := &mockCacheMsg{data: data, subject: "worker.cache.background.update", numDeliv: 1}
@@ -280,7 +279,7 @@ func TestHandleMessage_ConcurrentStressTest(t *testing.T) {
 	req := &pb.ExecuteWorkflowNodeRequest{
 		Identity: &pb.InfrastructureIdentity{JobId: "job-stress", TenantId: "t-stress", AppId: "a-stress"},
 		NodeConfig: &pb.NodeConfiguration{NodeName: "stress_node"},
-		Cache:      &pb.CacheContract{CollectionName: "stress_coll", LookupInput: "stress_input", Confidence: 0.8},
+		Cache:      &pb.CacheContract{CollectionName: "stress_coll", Confidence: 0.8},
 		NodeOutput: unmarshalStruct(`{"stress":true}`),
 	}
 	data, _ := proto.Marshal(req)

@@ -50,9 +50,6 @@ func buildConditions(identity *docpb.InfrastructureIdentity, metadata map[string
 		if identity.AppId != "" {
 			conditions = append(conditions, makeKeywordCondition("app_id", identity.AppId))
 		}
-		if identity.JobId != "" {
-			conditions = append(conditions, makeKeywordCondition("job_id", identity.JobId))
-		}
 	}
 
 	for k, v := range metadata {
@@ -108,41 +105,7 @@ func (c *Client) Search(ctx context.Context, collectionName string, vector []flo
 
 	var results []domain.SearchResult
 	for _, point := range resp.Result {
-		payloadStr := ""
-		if payloadVal, ok := point.Payload["json_payload"]; ok {
-			payloadStr = payloadVal.GetStringValue()
-		}
-
-		resultMetadata := make(map[string]any)
-		var recordIdentity *docpb.InfrastructureIdentity
-		for k, v := range point.Payload {
-			if k == "tenant_id" || k == "app_id" || k == "job_id" {
-				if recordIdentity == nil {
-					recordIdentity = &docpb.InfrastructureIdentity{}
-				}
-				switch k {
-				case "tenant_id":
-					recordIdentity.TenantId = v.GetStringValue()
-				case "app_id":
-					recordIdentity.AppId = v.GetStringValue()
-				case "job_id":
-					recordIdentity.JobId = v.GetStringValue()
-				}
-			} else if k != "json_payload" {
-				resultMetadata[k] = v.GetStringValue()
-			}
-		}
-		if recordIdentity == nil {
-			recordIdentity = identity
-		}
-
-		// Extract ID
-		idStr := ""
-		if point.Id != nil {
-			if uuid := point.Id.GetUuid(); uuid != "" {
-				idStr = uuid
-			}
-		}
+		idStr, recordIdentity, resultMetadata, payloadStr := parsePointData(point.Id, point.Payload, identity)
 
 		results = append(results, domain.SearchResult{
 			Record: domain.CacheRecord{
@@ -313,40 +276,7 @@ func (c *Client) GetByMetadata(ctx context.Context, collectionName string, ident
 
 	var results []domain.SearchResult
 	for _, point := range resp.Result {
-		payloadStr := ""
-		if payloadVal, ok := point.Payload["json_payload"]; ok {
-			payloadStr = payloadVal.GetStringValue()
-		}
-
-		resultMetadata := make(map[string]any)
-		var recordIdentity *docpb.InfrastructureIdentity
-		for k, v := range point.Payload {
-			if k == "tenant_id" || k == "app_id" || k == "job_id" {
-				if recordIdentity == nil {
-					recordIdentity = &docpb.InfrastructureIdentity{}
-				}
-				switch k {
-				case "tenant_id":
-					recordIdentity.TenantId = v.GetStringValue()
-				case "app_id":
-					recordIdentity.AppId = v.GetStringValue()
-				case "job_id":
-					recordIdentity.JobId = v.GetStringValue()
-				}
-			} else if k != "json_payload" {
-				resultMetadata[k] = v.GetStringValue()
-			}
-		}
-		if recordIdentity == nil {
-			recordIdentity = identity
-		}
-
-		idStr := ""
-		if point.Id != nil {
-			if uuid := point.Id.GetUuid(); uuid != "" {
-				idStr = uuid
-			}
-		}
+		idStr, recordIdentity, resultMetadata, payloadStr := parsePointData(point.Id, point.Payload, identity)
 
 		results = append(results, domain.SearchResult{
 			Record: domain.CacheRecord{
@@ -365,3 +295,41 @@ func (c *Client) GetByMetadata(ctx context.Context, collectionName string, ident
 
 // compile-time check to ensure Client implements domain.VectorStore
 var _ domain.VectorStore = (*Client)(nil)
+
+func parsePointData(pointId *pb.PointId, payload map[string]*pb.Value, identity *docpb.InfrastructureIdentity) (string, *docpb.InfrastructureIdentity, map[string]any, string) {
+	payloadStr := ""
+	if payloadVal, ok := payload["json_payload"]; ok {
+		payloadStr = payloadVal.GetStringValue()
+	}
+
+	resultMetadata := make(map[string]any)
+	var recordIdentity *docpb.InfrastructureIdentity
+	for k, v := range payload {
+		if k == "tenant_id" || k == "app_id" || k == "job_id" {
+			if recordIdentity == nil {
+				recordIdentity = &docpb.InfrastructureIdentity{}
+			}
+			switch k {
+			case "tenant_id":
+				recordIdentity.TenantId = v.GetStringValue()
+			case "app_id":
+				recordIdentity.AppId = v.GetStringValue()
+			case "job_id":
+				recordIdentity.JobId = v.GetStringValue()
+			}
+		} else if k != "json_payload" {
+			resultMetadata[k] = v.GetStringValue()
+		}
+	}
+	if recordIdentity == nil {
+		recordIdentity = identity
+	}
+
+	idStr := ""
+	if pointId != nil {
+		if uuid := pointId.GetUuid(); uuid != "" {
+			idStr = uuid
+		}
+	}
+	return idStr, recordIdentity, resultMetadata, payloadStr
+}

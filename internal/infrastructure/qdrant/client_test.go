@@ -25,9 +25,9 @@ func TestBuildConditions(t *testing.T) {
 			"key2": 123, // non-string should be skipped gracefully
 		}
 		conds := buildConditions(identity, metadata)
-		// Expected: tenant_id, app_id, job_id, key1 = 4 conditions
-		if len(conds) != 4 {
-			t.Fatalf("expected 4 conditions, got %d", len(conds))
+		// Expected: tenant_id, app_id, key1 = 3 conditions
+		if len(conds) != 3 {
+			t.Fatalf("expected 3 conditions, got %d", len(conds))
 		}
 	})
 

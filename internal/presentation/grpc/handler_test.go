@@ -9,6 +9,7 @@ import (
 	"github.com/doc_processor/semantic_cache_service/internal/application"
 	"github.com/doc_processor/semantic_cache_service/internal/domain"
 	grpchandler "github.com/doc_processor/semantic_cache_service/internal/presentation/grpc"
+	"google.golang.org/protobuf/types/known/structpb"
 )
 
 type mockEmbedder struct{}
@@ -67,8 +68,7 @@ func TestGRPCHandler_NilIdentityEdgeCases(t *testing.T) {
 	t.Run("CheckCache with Nil Identity", func(t *testing.T) {
 		_, err := h.CheckCache(ctx, &pb.CheckCacheRequest{
 			CollectionName: "test",
-			Text:           "test text",
-			Threshold:      0.8,
+			Confidence:     0.8,
 			Identity:       nil,
 		})
 		if err == nil {
@@ -79,7 +79,6 @@ func TestGRPCHandler_NilIdentityEdgeCases(t *testing.T) {
 	t.Run("StoreExtraction with Nil Identity", func(t *testing.T) {
 		_, err := h.StoreExtraction(ctx, &pb.StoreExtractionRequest{
 			CollectionName:   "test",
-			Text:             "test text",
 			ExtractedPayload: `{"test":"val"}`,
 			Identity:         nil,
 		})
@@ -91,7 +90,6 @@ func TestGRPCHandler_NilIdentityEdgeCases(t *testing.T) {
 	t.Run("SeedCache with Nil Identity", func(t *testing.T) {
 		_, err := h.SeedCache(ctx, &pb.SeedCacheRequest{
 			CollectionName:   "test",
-			TemplateText:     "template",
 			ExtractedPayload: `{"template":true}`,
 			Identity:         nil,
 		})
@@ -101,9 +99,10 @@ func TestGRPCHandler_NilIdentityEdgeCases(t *testing.T) {
 	})
 
 	t.Run("CheckMetadataExists with Nil Identity", func(t *testing.T) {
+		meta, _ := structpb.NewStruct(map[string]any{"foo": "bar"})
 		_, err := h.CheckMetadataExists(ctx, &pb.CheckMetadataRequest{
 			CollectionName: "test",
-			Metadata:       map[string]string{"foo": "bar"},
+			Metadata:       meta,
 			Identity:       nil,
 		})
 		if err == nil {
@@ -114,7 +113,6 @@ func TestGRPCHandler_NilIdentityEdgeCases(t *testing.T) {
 	t.Run("QueryBlankDocument with Nil Identity", func(t *testing.T) {
 		_, err := h.QueryBlankDocument(ctx, &pb.QueryBlankDocumentRequest{
 			CollectionName:     "test",
-			TextRepresentation: "blank doc text",
 			Identity:           nil,
 		})
 		if err == nil {
@@ -125,7 +123,6 @@ func TestGRPCHandler_NilIdentityEdgeCases(t *testing.T) {
 	t.Run("RegisterBlankDocument with Nil Identity and Empty Text", func(t *testing.T) {
 		_, err := h.RegisterBlankDocument(ctx, &pb.RegisterBlankDocumentRequest{
 			CollectionName:     "test",
-			TextRepresentation: "",
 			Identity:           nil,
 		})
 		if err == nil {
@@ -150,8 +147,7 @@ func TestGRPCHandler_ErrorHandling(t *testing.T) {
 	t.Run("CheckCache error propagates", func(t *testing.T) {
 		_, err := h.CheckCache(ctx, &pb.CheckCacheRequest{
 			CollectionName: "test",
-			Text:           "test text",
-			Threshold:      0.8,
+			Confidence:     0.8,
 			Identity:       &pb.InfrastructureIdentity{JobId: "j", TenantId: "t", AppId: "a"},
 		})
 		if err == nil {
@@ -162,7 +158,6 @@ func TestGRPCHandler_ErrorHandling(t *testing.T) {
 	t.Run("StoreExtraction error returns success false and error", func(t *testing.T) {
 		_, err := h.StoreExtraction(ctx, &pb.StoreExtractionRequest{
 			CollectionName:   "test",
-			Text:             "test text",
 			ExtractedPayload: "payload",
 			Identity:         &pb.InfrastructureIdentity{JobId: "j", TenantId: "t", AppId: "a"},
 		})

@@ -8,6 +8,8 @@ import (
 	pb "github.com/AndrewK4758/shared_protos"
 	"github.com/doc_processor/semantic_cache_service/internal/application"
 	"github.com/doc_processor/semantic_cache_service/internal/domain"
+	"google.golang.org/protobuf/types/known/structpb"
+	"google.golang.org/protobuf/types/known/anypb"
 )
 
 // --- Mocks ---
@@ -218,7 +220,27 @@ func TestSemanticCacheApp_CheckCache(t *testing.T) {
 			storeMock := &mockVectorStore{searchFn: tt.searchFn, getByMetadataFn: tt.getByMetadataFn}
 			app := application.NewSemanticCacheApp(embedMock, storeMock)
 
-			hit, payload, conf, err := app.CheckCache(context.Background(), "test_collection", tt.args.text, nil, tt.args.metadata, tt.args.threshold)
+			var metaStruct *structpb.Struct
+			if tt.args.metadata != nil {
+				var err error
+				metaStruct, err = structpb.NewStruct(tt.args.metadata)
+				if err != nil {
+					t.Fatalf("failed to create structpb: %v", err)
+				}
+			}
+
+			contract := &pb.CacheContract{
+				CollectionName: "test_collection",
+				Confidence:     tt.args.threshold,
+				MetadataLookup: metaStruct,
+			}
+			identity := &pb.InfrastructureIdentity{
+				TenantId: "tenant_123",
+				AppId:    "app_456",
+				JobId:    "job_789",
+			}
+
+			hit, payload, conf, err := app.CheckCache(context.Background(), contract, identity, nil)
 
 			if (err != nil) != tt.expectError {
 				t.Fatalf("expected error: %v, got: %v", tt.expectError, err)
@@ -236,6 +258,82 @@ func TestSemanticCacheApp_CheckCache(t *testing.T) {
 				t.Errorf("expected confidence: %f, got: %f", tt.expectedConfidence, conf)
 			}
 		})
+	}
+}
+
+func TestCheckCache_EmptyMetadataWithNonNilIdentity_SkipsStage1(t *testing.T) {
+	embedCalled := false
+	searchCalled := false
+
+	embedMock := &mockEmbeddingService{
+		generateFn: func(ctx context.Context, text string) ([]float32, error) {
+			embedCalled = true
+			return []float32{0.1, 0.2, 0.3}, nil
+		},
+	}
+
+	storeMock := &mockVectorStore{
+		getByMetadataFn: func(ctx context.Context, collectionName string, identity *pb.InfrastructureIdentity, metadata map[string]any) ([]domain.SearchResult, error) {
+			t.Errorf("getByMetadataFn (Stage 1) should NOT be called when metadata lookup is empty")
+			return []domain.SearchResult{
+				{
+					Score: 1.0,
+					Record: domain.CacheRecord{
+						JSONPayload: `{"doc": "wrong_unrelated_doc"}`,
+					},
+				},
+			}, nil
+		},
+		searchFn: func(ctx context.Context, collectionName string, vector []float32, identity *pb.InfrastructureIdentity, metadata map[string]any, limit int) ([]domain.SearchResult, error) {
+			searchCalled = true
+			return []domain.SearchResult{
+				{
+					Score: 0.95,
+					Record: domain.CacheRecord{
+						JSONPayload: `{"doc": "correct_semantic_doc"}`,
+					},
+				},
+			}, nil
+		},
+	}
+
+	app := application.NewSemanticCacheApp(embedMock, storeMock)
+
+	contract := &pb.CacheContract{
+		CollectionName: "test_collection",
+		Confidence:     0.90,
+		MetadataLookup: nil,
+	}
+	identity := &pb.InfrastructureIdentity{
+		TenantId: "tenant_123",
+		AppId:    "app_456",
+		JobId:    "job_789",
+	}
+
+	hit, payload, conf, err := app.CheckCache(context.Background(), contract, identity, nil)
+	if err != nil {
+		t.Fatalf("unexpected error: %v", err)
+	}
+
+	if !hit {
+		t.Errorf("expected hit to be true, got false")
+	}
+
+	expectedPayload := `{"doc": "correct_semantic_doc"}`
+	if payload != expectedPayload {
+		t.Errorf("expected payload %s, got %s", expectedPayload, payload)
+	}
+
+	if conf != 0.95 {
+		t.Errorf("expected confidence 0.95, got %f", conf)
+	}
+
+	if !embedCalled {
+		t.Errorf("expected Stage 2 embedding generation to be called")
+	}
+
+	if !searchCalled {
+		t.Errorf("expected Stage 2 vector search to be called")
 	}
 }
 
@@ -292,7 +390,11 @@ func TestSemanticCacheApp_StoreExtraction(t *testing.T) {
 			embedMock := &mockEmbeddingService{generateFn: tt.embedFn}
 			storeMock := &mockVectorStore{upsertFn: tt.upsertFn}
 			app := application.NewSemanticCacheApp(embedMock, storeMock)
-			err := app.StoreExtraction(context.Background(), "test_collection", tt.args.text, nil, tt.args.metadata, tt.args.extractedPayload)
+			
+			val, _ := structpb.NewValue(tt.args.text)
+			anyPayload, _ := anypb.New(val)
+			
+			err := app.StoreExtraction(context.Background(), "test_collection", nil, tt.args.metadata, tt.args.extractedPayload, anyPayload)
 
 			if (err != nil) != tt.expectError {
 				t.Fatalf("expected error: %v, got: %v", tt.expectError, err)

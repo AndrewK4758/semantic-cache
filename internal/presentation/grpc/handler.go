@@ -25,16 +25,7 @@ func NewSemanticCacheHandler(app *application.SemanticCacheApp) *SemanticCacheHa
 	}
 }
 
-func toMetadataMap(m map[string]string) map[string]any {
-	if len(m) == 0 {
-		return nil
-	}
-	res := make(map[string]any, len(m))
-	for k, v := range m {
-		res[k] = v
-	}
-	return res
-}
+
 
 // CheckCache handles the CheckCache gRPC request.
 func (h *SemanticCacheHandler) CheckCache(ctx context.Context, req *pb.CheckCacheRequest) (*pb.CheckCacheResponse, error) {
@@ -47,7 +38,16 @@ func (h *SemanticCacheHandler) CheckCache(ctx context.Context, req *pb.CheckCach
 
 	logger.Info("SemanticCache", "INFO: [gRPC] Received CheckCache request. Collection: %s", req.CollectionName)
 
-	hit, payload, confidence, err := h.app.CheckCache(ctx, req.CollectionName, req.Text, req.Identity, toMetadataMap(req.Metadata), req.Threshold)
+	contract := &pb.CacheContract{
+		Enabled:         req.Enabled,
+		CollectionName:  req.CollectionName,
+		CacheHit:        req.CacheHit,
+		Confidence:      req.Confidence,
+		EmbeddingLookup: req.EmbeddingLookup,
+		MetadataLookup:  req.MetadataLookup,
+	}
+
+	hit, payload, confidence, err := h.app.CheckCache(ctx, contract, req.Identity, nil)
 	if err != nil {
 		logger.Info("SemanticCache", "ERROR: [gRPC] CheckCache failed: %v", err)
 		return nil, fmt.Errorf("application layer CheckCache failed: %w", err)
@@ -72,7 +72,11 @@ func (h *SemanticCacheHandler) StoreExtraction(ctx context.Context, req *pb.Stor
 
 	logger.Info("SemanticCache", "INFO: [gRPC] Received StoreExtraction request. Collection: %s", req.CollectionName)
 
-	err := h.app.StoreExtraction(ctx, req.CollectionName, req.Text, req.Identity, toMetadataMap(req.Metadata), req.ExtractedPayload)
+	var metaMap map[string]any
+	if req.Metadata != nil {
+		metaMap = req.Metadata.AsMap()
+	}
+	err := h.app.StoreExtraction(ctx, req.CollectionName, req.Identity, metaMap, req.ExtractedPayload, req.EmbeddingPayload)
 	if err != nil {
 		logger.Info("SemanticCache", "ERROR: [gRPC] StoreExtraction failed: %v", err)
 		return &pb.StoreExtractionResponse{Success: false}, fmt.Errorf("application layer StoreExtraction failed: %w", err)
@@ -94,7 +98,11 @@ func (h *SemanticCacheHandler) SeedCache(ctx context.Context, req *pb.SeedCacheR
 	logger.Info("SemanticCache", "INFO: [gRPC] Received SeedCache request. Collection: %s", req.CollectionName)
 
 	// Seeding uses the exact same underlying logic as storing an extraction
-	err := h.app.StoreExtraction(ctx, req.CollectionName, req.TemplateText, req.Identity, toMetadataMap(req.Metadata), req.ExtractedPayload)
+	var metaMap map[string]any
+	if req.Metadata != nil {
+		metaMap = req.Metadata.AsMap()
+	}
+	err := h.app.StoreExtraction(ctx, req.CollectionName, req.Identity, metaMap, req.ExtractedPayload, req.EmbeddingPayload)
 	if err != nil {
 		logger.Info("SemanticCache", "ERROR: [gRPC] SeedCache failed: %v", err)
 		return &pb.SeedCacheResponse{Success: false, Message: err.Error()}, fmt.Errorf("application layer StoreExtraction for seeding failed: %w", err)
@@ -115,7 +123,11 @@ func (h *SemanticCacheHandler) CheckMetadataExists(ctx context.Context, req *pb.
 
 	logger.Info("SemanticCache", "INFO: [gRPC] Received CheckMetadataExists request. Collection: %s", req.CollectionName)
 
-	exists, err := h.app.CheckMetadata(ctx, req.CollectionName, req.Identity, toMetadataMap(req.Metadata))
+	var metaMap map[string]any
+	if req.Metadata != nil {
+		metaMap = req.Metadata.AsMap()
+	}
+	exists, err := h.app.CheckMetadata(ctx, req.CollectionName, req.Identity, metaMap)
 	if err != nil {
 		logger.Info("SemanticCache", "ERROR: [gRPC] CheckMetadataExists failed: %v", err)
 		return nil, fmt.Errorf("application layer CheckMetadata failed: %w", err)
@@ -136,7 +148,13 @@ func (h *SemanticCacheHandler) QueryBlankDocument(ctx context.Context, req *pb.Q
 
 	logger.Info("SemanticCache", "INFO: [gRPC] Received QueryBlankDocument request. Collection: %s", req.CollectionName)
 
-	hit, payload, confidence, err := h.app.CheckCache(ctx, req.CollectionName, req.TextRepresentation, req.Identity, nil, req.ConfidenceThreshold)
+	contract := &pb.CacheContract{
+		CollectionName: req.CollectionName,
+		EmbeddingLookup: req.EmbeddingLookup,
+		Confidence:     req.ConfidenceThreshold,
+	}
+
+	hit, payload, confidence, err := h.app.CheckCache(ctx, contract, req.Identity, nil)
 	if err != nil {
 		logger.Error("SemanticCache", "ERROR: [gRPC] QueryBlankDocument failed: %v", err)
 		return nil, fmt.Errorf("application layer CheckCache failed: %w", err)
@@ -161,11 +179,12 @@ func (h *SemanticCacheHandler) RegisterBlankDocument(ctx context.Context, req *p
 
 	logger.Info("SemanticCache", "INFO: [gRPC] Received RegisterBlankDocument request. Collection: %s", req.CollectionName)
 
-	payload := req.TextRepresentation
-	if strings.TrimSpace(payload) == "" {
-		return nil, status.Error(codes.InvalidArgument, "TextRepresentation cannot be empty")
+	if req.EmbeddingPayload == nil {
+		return nil, status.Error(codes.InvalidArgument, "EmbeddingPayload cannot be empty")
 	}
-	err := h.app.StoreExtraction(ctx, req.CollectionName, req.TextRepresentation, req.Identity, nil, payload)
+	// For blank document registration, we can just use a constant or extract string if needed for payload.
+	// We'll store a placeholder payload for blank documents
+	err := h.app.StoreExtraction(ctx, req.CollectionName, req.Identity, nil, "BLANK_DOCUMENT", req.EmbeddingPayload)
 	if err != nil {
 		logger.Error("SemanticCache", "ERROR: [gRPC] RegisterBlankDocument failed: %v", err)
 		return &pb.RegisterBlankDocumentResponse{Success: false}, fmt.Errorf("application layer StoreExtraction failed: %w", err)

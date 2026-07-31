@@ -205,10 +205,13 @@ func (h *JetStreamHandler) handleMessage(msg jetstream.Msg) {
 
 	if subject == "worker.cache.lookup" {
 		// Cache Lookup
-		hit, payload, confidence, err := h.app.CheckCache(ctx, cacheConfig.CollectionName, cacheConfig.LookupInput, req.Identity, metadata, cacheConfig.Confidence)
+		hit, payload, confidence, err := h.app.CheckCache(ctx, cacheConfig, req.Identity, metadata)
 		if err != nil {
 			logger.Error("SemanticCache", "CheckCache failed: %v", err)
-			h.sendErrorReply(ctx, msg, fmt.Sprintf("CheckCache failed: %v", err), req.Identity)
+			err = h.sendErrorReply(ctx, msg, fmt.Sprintf("CheckCache failed: %v", err), req.Identity)
+			if err != nil {
+				return
+			}
 			natsutil.LogJetStreamEvent(natsutil.JetStreamLogEvent{
 				Component:  "SemanticCache",
 				Event:      "NACKED",
@@ -271,7 +274,7 @@ func (h *JetStreamHandler) handleMessage(msg jetstream.Msg) {
 		payloadToStore := string(payloadBytes)
 
 		// Cache Update
-		err = h.app.StoreExtraction(ctx, cacheConfig.CollectionName, cacheConfig.LookupInput, req.Identity, metadata, payloadToStore)
+		err = h.app.StoreExtraction(ctx, cacheConfig.CollectionName, req.Identity, metadata, payloadToStore, cacheConfig.EmbeddingLookup)
 		if err != nil {
 			logger.Error("SemanticCache", "StoreExtraction failed: %v", err)
 			h.sendErrorReply(ctx, msg, fmt.Sprintf("StoreExtraction failed: %v", err), req.Identity)
