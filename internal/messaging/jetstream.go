@@ -121,7 +121,8 @@ func (h *JetStreamHandler) handleMessage(msg jetstream.Msg) {
 	}
 
 	t, a, j := parser.ExtractIdentity()
-	jobNameID := parser.GetJobNameId()
+	graphID := parser.GetGraphId()
+	initialNodeID := parser.GetInitialNodeId()
 
 	natsutil.LogJetStreamEvent(natsutil.JetStreamLogEvent{
 		Component: "SemanticCache",
@@ -136,8 +137,8 @@ func (h *JetStreamHandler) handleMessage(msg jetstream.Msg) {
 		Attempt:   attempt,
 	})
 
-	if err == nil && meta.NumDelivered > 5 {
-		logger.Info("SemanticCache", "Message exceeded max delivery attempts, terminating (job_name_id: %d)", jobNameID)
+	if err == nil && meta != nil && meta.NumDelivered > 5 {
+		logger.Info("SemanticCache", "Message exceeded max delivery attempts, terminating (graph_id: %s, initial_node_id: %s)", graphID, initialNodeID)
 		h.sendErrorReply(ctx, msg, "Action failed after multiple retries due to rate limits.", parser.GetIdentity())
 		natsutil.LogJetStreamEvent(natsutil.JetStreamLogEvent{
 			Component:  "SemanticCache",
@@ -187,7 +188,7 @@ func (h *JetStreamHandler) handleMessage(msg jetstream.Msg) {
 		}
 	}()
 
-	logger.Info("SemanticCache", "Received action request on subject: %s (job_name_id: %d)", subject, jobNameID)
+	logger.Info("SemanticCache", "Received action request on subject: %s (graph_id: %s, initial_node_id: %s)", subject, graphID, initialNodeID)
 
 	cacheConfig := parser.GetCacheContract()
 	if cacheConfig == nil || parser.GetNodeName() == "" {
@@ -208,9 +209,8 @@ func (h *JetStreamHandler) handleMessage(msg jetstream.Msg) {
 		hit, payload, confidence, err := h.app.CheckCache(ctx, cacheConfig, req.Identity, metadata)
 		if err != nil {
 			logger.Error("SemanticCache", "CheckCache failed: %v", err)
-			err = h.sendErrorReply(ctx, msg, fmt.Sprintf("CheckCache failed: %v", err), req.Identity)
-			if err != nil {
-				return
+			if replyErr := h.sendErrorReply(ctx, msg, fmt.Sprintf("CheckCache failed: %v", err), req.Identity); replyErr != nil {
+				logger.Error("SemanticCache", "Failed to send error reply: %v", replyErr)
 			}
 			natsutil.LogJetStreamEvent(natsutil.JetStreamLogEvent{
 				Component:  "SemanticCache",
@@ -377,7 +377,7 @@ func (h *JetStreamHandler) sendSuccessReply(ctx context.Context, msg jetstream.M
 	var resultStruct structpb.Struct
 	if err := protojson.Unmarshal([]byte(resultJson), &resultStruct); err != nil {
 		logger.Error("SemanticCache", "Failed to unmarshal result JSON into Struct: %v", err)
-		// Fallback to empty struct if unmarshal fails, or we could return error
+		return fmt.Errorf("failed to unmarshal result JSON into Struct: %w", err)
 	}
 
 	resp := &pb.PerformActionResponse{

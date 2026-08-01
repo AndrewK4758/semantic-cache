@@ -470,3 +470,109 @@ func TestSemanticCacheApp_CheckMetadata(t *testing.T) {
 		})
 	}
 }
+
+func TestSemanticCacheApp_CheckCache_NilContract(t *testing.T) {
+	embedMock := &mockEmbeddingService{}
+	storeMock := &mockVectorStore{}
+	app := application.NewSemanticCacheApp(embedMock, storeMock)
+
+	identity := &pb.InfrastructureIdentity{
+		TenantId: "tenant_1",
+		AppId:    "app_1",
+		JobId:    "job_1",
+	}
+
+	_, _, _, err := app.CheckCache(context.Background(), nil, identity, nil)
+	if err == nil {
+		t.Fatalf("expected error when contract is nil, got nil")
+	}
+}
+
+func TestSemanticCacheApp_CheckCache_PrecomputedVector(t *testing.T) {
+	embedCalled := false
+	embedMock := &mockEmbeddingService{
+		generateFn: func(ctx context.Context, text string) ([]float32, error) {
+			embedCalled = true
+			return nil, errors.New("should not generate embedding when pre-computed vector is provided")
+		},
+	}
+
+	var searchedVector []float32
+	storeMock := &mockVectorStore{
+		searchFn: func(ctx context.Context, collectionName string, vector []float32, identity *pb.InfrastructureIdentity, metadata map[string]any, limit int) ([]domain.SearchResult, error) {
+			searchedVector = vector
+			return []domain.SearchResult{
+				{
+					Score:  0.98,
+					Record: domain.CacheRecord{JSONPayload: `{"precomputed":true}`},
+				},
+			}, nil
+		},
+	}
+
+	app := application.NewSemanticCacheApp(embedMock, storeMock)
+
+	listVal, _ := structpb.NewList([]any{0.5, 0.6, 0.7})
+	anyVec, _ := anypb.New(listVal)
+
+	contract := &pb.CacheContract{
+		CollectionName:  "test_coll",
+		Confidence:      0.90,
+		EmbeddingLookup: anyVec,
+	}
+	identity := &pb.InfrastructureIdentity{
+		TenantId: "t1",
+		AppId:    "a1",
+		JobId:    "j1",
+	}
+
+	hit, payload, conf, err := app.CheckCache(context.Background(), contract, identity, nil)
+	if err != nil {
+		t.Fatalf("unexpected error: %v", err)
+	}
+	if embedCalled {
+		t.Fatalf("embedder should not have been called when pre-computed vector is passed")
+	}
+	if !hit || payload != `{"precomputed":true}` || conf != 0.98 {
+		t.Fatalf("unexpected result: hit=%v, payload=%s, conf=%f", hit, payload, conf)
+	}
+	if len(searchedVector) != 3 || searchedVector[0] != 0.5 {
+		t.Fatalf("expected searched vector [0.5, 0.6, 0.7], got %v", searchedVector)
+	}
+}
+
+func TestSemanticCacheApp_StoreExtraction_PrecomputedVector(t *testing.T) {
+	embedCalled := false
+	embedMock := &mockEmbeddingService{
+		generateFn: func(ctx context.Context, text string) ([]float32, error) {
+			embedCalled = true
+			return nil, errors.New("should not generate embedding")
+		},
+	}
+
+	var storedVec []float32
+	storeMock := &mockVectorStore{
+		upsertFn: func(ctx context.Context, collectionName string, record domain.CacheRecord) error {
+			storedVec = record.Vector
+			return nil
+		},
+	}
+
+	app := application.NewSemanticCacheApp(embedMock, storeMock)
+
+	listVal, _ := structpb.NewList([]any{0.11, 0.22, 0.33})
+	anyVec, _ := anypb.New(listVal)
+
+	identity := &pb.InfrastructureIdentity{TenantId: "t1", AppId: "a1", JobId: "j1"}
+
+	err := app.StoreExtraction(context.Background(), "test_coll", identity, nil, `{"data":1}`, anyVec)
+	if err != nil {
+		t.Fatalf("unexpected error: %v", err)
+	}
+	if embedCalled {
+		t.Fatalf("embedder should not have been called when pre-computed vector is passed")
+	}
+	if len(storedVec) != 3 || storedVec[0] != float32(0.11) {
+		t.Fatalf("expected stored vector [0.11, 0.22, 0.33], got %v", storedVec)
+	}
+}

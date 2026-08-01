@@ -4,6 +4,7 @@ import (
 	"context"
 	"crypto/sha256"
 	"encoding/hex"
+	"encoding/json"
 	"fmt"
 	"strings"
 
@@ -33,9 +34,16 @@ func extractVectorFromAny(anyVal *anypb.Any) ([]float32, error) {
 	if anyVal == nil {
 		return nil, nil
 	}
+	var strVal wrapperspb.StringValue
+	if err := anyVal.UnmarshalTo(&strVal); err == nil {
+		var vec []float32
+		if errJson := json.Unmarshal([]byte(strVal.GetValue()), &vec); errJson == nil {
+			return vec, nil
+		}
+	}
+
 	var list structpb.ListValue
 	if err := anyVal.UnmarshalTo(&list); err != nil {
-		logger.Error("SemanticCache", "ERROR: [SemanticCacheApp] Failed to unmarshal vector from anypb.Any as ListValue: %v", err)
 		return nil, fmt.Errorf("failed to unmarshal vector: %w", err)
 	}
 
