@@ -158,16 +158,18 @@ func TestChallenger_NilMetadataInMsg(t *testing.T) {
 		app: app,
 	}
 
-	req := &pb.ExecuteWorkflowNodeRequest{
+	payload, _ := structpb.NewStruct(map[string]interface{}{
+		"node_name": "TestNode",
+		"cache_contract": map[string]interface{}{
+			"collection_name": "test_coll",
+		},
+	})
+	req := &pb.ExecuteTaskRequest{
+		TaskSubject: "worker.cache.lookup",
 		Identity: &pb.InfrastructureIdentity{
 			TenantId: "t1", AppId: "a1", JobId: "j1",
 		},
-		NodeConfig: &pb.NodeConfiguration{
-			NodeName: "TestNode",
-		},
-		Cache: &pb.CacheContract{
-			CollectionName: "test_coll",
-		},
+		Payload: payload,
 	}
 
 	data, _ := proto.Marshal(req)
@@ -201,16 +203,18 @@ func TestChallenger_CheckCacheErrorOverwrittenBySendReply(t *testing.T) {
 		app: app,
 	}
 
-	req := &pb.ExecuteWorkflowNodeRequest{
+	payload, _ := structpb.NewStruct(map[string]interface{}{
+		"node_name": "TestNode",
+		"cache_contract": map[string]interface{}{
+			"collection_name": "test_coll",
+		},
+	})
+	req := &pb.ExecuteTaskRequest{
+		TaskSubject: "worker.cache.lookup",
 		Identity: &pb.InfrastructureIdentity{
 			TenantId: "t1", AppId: "a1", JobId: "j1",
 		},
-		NodeConfig: &pb.NodeConfiguration{
-			NodeName: "TestNode",
-		},
-		Cache: &pb.CacheContract{
-			CollectionName: "test_coll",
-		},
+		Payload: payload,
 	}
 
 	data, _ := proto.Marshal(req)
@@ -254,20 +258,31 @@ func TestChallenger_ExtremeConcurrencyStress(t *testing.T) {
 		app: app,
 	}
 
-	nodeOutput, _ := structpb.NewStruct(map[string]interface{}{"data": "value"})
-
-	req1 := &pb.ExecuteWorkflowNodeRequest{
-		Identity:   &pb.InfrastructureIdentity{TenantId: "t1", AppId: "a1", JobId: "j1"},
-		NodeConfig: &pb.NodeConfiguration{NodeName: "TestNode"},
-		Cache:      &pb.CacheContract{CollectionName: "coll1", Confidence: 0.8},
+	payload1, _ := structpb.NewStruct(map[string]interface{}{
+		"node_name": "TestNode",
+		"cache_contract": map[string]interface{}{
+			"collection_name": "coll1",
+			"confidence":      0.8,
+		},
+	})
+	req1 := &pb.ExecuteTaskRequest{
+		TaskSubject: "worker.cache.lookup",
+		Identity:    &pb.InfrastructureIdentity{TenantId: "t1", AppId: "a1", JobId: "j1"},
+		Payload:     payload1,
 	}
 	data1, _ := proto.Marshal(req1)
 
-	req2 := &pb.ExecuteWorkflowNodeRequest{
-		Identity:   &pb.InfrastructureIdentity{TenantId: "t2", AppId: "a2", JobId: "j2"},
-		NodeConfig: &pb.NodeConfiguration{NodeName: "TestNode2"},
-		Cache:      &pb.CacheContract{CollectionName: "coll2"},
-		NodeOutput: nodeOutput,
+	payload2, _ := structpb.NewStruct(map[string]interface{}{
+		"node_name": "TestNode2",
+		"cache_contract": map[string]interface{}{
+			"collection_name": "coll2",
+		},
+		"node_output": map[string]interface{}{"data": "value"},
+	})
+	req2 := &pb.ExecuteTaskRequest{
+		TaskSubject: "worker.cache.background.update",
+		Identity:    &pb.InfrastructureIdentity{TenantId: "t2", AppId: "a2", JobId: "j2"},
+		Payload:     payload2,
 	}
 	data2, _ := proto.Marshal(req2)
 
@@ -329,11 +344,16 @@ func TestChallenger_BackgroundUpdateCorruptNodeOutput(t *testing.T) {
 	app := application.NewSemanticCacheApp(embedder, store)
 	h := &JetStreamHandler{app: app}
 
-	req := &pb.ExecuteWorkflowNodeRequest{
-		Identity:   &pb.InfrastructureIdentity{TenantId: "t1", AppId: "a1", JobId: "j1"},
-		NodeConfig: &pb.NodeConfiguration{NodeName: "TestNode"},
-		Cache:      &pb.CacheContract{CollectionName: "coll1"},
-		NodeOutput: nil, // missing NodeOutput
+	payload, _ := structpb.NewStruct(map[string]interface{}{
+		"node_name": "TestNode",
+		"cache_contract": map[string]interface{}{
+			"collection_name": "coll1",
+		},
+	})
+	req := &pb.ExecuteTaskRequest{
+		TaskSubject: "worker.cache.background.update",
+		Identity:    &pb.InfrastructureIdentity{TenantId: "t1", AppId: "a1", JobId: "j1"},
+		Payload:     payload,
 	}
 	data, _ := proto.Marshal(req)
 

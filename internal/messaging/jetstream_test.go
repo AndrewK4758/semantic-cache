@@ -85,14 +85,18 @@ func TestHitStr(t *testing.T) {
 func TestHandleMessage_MaxDeliveryAttemptsExceeded_TerminatesMessage(t *testing.T) {
 	handler := &JetStreamHandler{}
 
-	req := &pb.ExecuteWorkflowNodeRequest{
-		GraphId:       "graph-max-retries-101",
-		InitialNodeId: "node-init-202",
+	payload, _ := structpb.NewStruct(map[string]interface{}{
+		"graph_id":        "graph-max-retries-101",
+		"initial_node_id": "node-init-202",
+	})
+	req := &pb.ExecuteTaskRequest{
+		TaskSubject: "worker.cache.lookup",
 		Identity: &pb.InfrastructureIdentity{
 			JobId:    "job-max-retries",
 			TenantId: "t1",
 			AppId:    "a1",
 		},
+		Payload: payload,
 	}
 	data, _ := proto.Marshal(req)
 
@@ -112,15 +116,21 @@ func TestHandleMessage_MaxDeliveryAttemptsExceeded_TerminatesMessage(t *testing.
 func TestHandleMessage_MissingNodeConfig_TermsMessage(t *testing.T) {
 	handler := &JetStreamHandler{}
 
-	req := &pb.ExecuteWorkflowNodeRequest{
-		GraphId:       "graph-missing-cfg",
-		InitialNodeId: "node-missing-cfg",
+	payload, _ := structpb.NewStruct(map[string]interface{}{
+		"graph_id":        "graph-missing-cfg",
+		"initial_node_id": "node-missing-cfg",
+		"cache_contract": map[string]interface{}{
+			"collection_name": "test_coll",
+		},
+	})
+	req := &pb.ExecuteTaskRequest{
+		TaskSubject: "worker.cache.lookup",
 		Identity: &pb.InfrastructureIdentity{
 			JobId:    "job-missing-cfg",
 			TenantId: "t1",
 			AppId:    "a1",
 		},
-		NodeConfig: nil,
+		Payload: payload,
 	}
 	data, _ := proto.Marshal(req)
 
@@ -140,21 +150,23 @@ func TestHandleMessage_MissingNodeConfig_TermsMessage(t *testing.T) {
 func TestHandleMessage_UnknownSubject_AcksMessage(t *testing.T) {
 	handler := &JetStreamHandler{}
 
-	req := &pb.ExecuteWorkflowNodeRequest{
-		GraphId:       "graph-unknown-subj",
-		InitialNodeId: "node-unknown-subj",
+	payload, _ := structpb.NewStruct(map[string]interface{}{
+		"graph_id":        "graph-unknown-subj",
+		"initial_node_id": "node-unknown-subj",
+		"node_name":       "Test Node",
+		"cache_contract": map[string]interface{}{
+			"collection_name": "test_coll",
+		},
+	})
+	req := &pb.ExecuteTaskRequest{
+		TaskSubject: "worker.cache.unknown",
 		Identity: &pb.InfrastructureIdentity{
 			JobId:    "job-unknown-subj",
 			TenantId: "t1",
 			AppId:    "a1",
 		},
-		StepId: "step-unknown",
-		NodeConfig: &pb.NodeConfiguration{
-			NodeName: "Test Node",
-		},
-		Cache: &pb.CacheContract{
-			CollectionName: "test_coll",
-		},
+		StepId:  "step-unknown",
+		Payload: payload,
 	}
 	data, _ := proto.Marshal(req)
 
@@ -174,19 +186,20 @@ func TestHandleMessage_UnknownSubject_AcksMessage(t *testing.T) {
 func TestHandleMessage_MissingCacheContract_TermsMessage(t *testing.T) {
 	handler := &JetStreamHandler{}
 
-	req := &pb.ExecuteWorkflowNodeRequest{
-		GraphId:       "graph-missing-cache",
-		InitialNodeId: "node-missing-cache",
+	payload, _ := structpb.NewStruct(map[string]interface{}{
+		"graph_id":        "graph-missing-cache",
+		"initial_node_id": "node-missing-cache",
+		"node_name":       "Test Node",
+	})
+	req := &pb.ExecuteTaskRequest{
+		TaskSubject: "worker.cache.lookup",
 		Identity: &pb.InfrastructureIdentity{
 			JobId:    "job-missing-cache",
 			TenantId: "t1",
 			AppId:    "a1",
 		},
-		StepId: "step-1",
-		NodeConfig: &pb.NodeConfiguration{
-			NodeName: "Test Node",
-		},
-		Cache: nil,
+		StepId:  "step-1",
+		Payload: payload,
 	}
 	data, _ := proto.Marshal(req)
 
@@ -209,21 +222,23 @@ func TestHandleMessage_GraphIdAndInitialNodeIdExtraction(t *testing.T) {
 	app := application.NewSemanticCacheApp(embedMock, storeMock)
 	handler := &JetStreamHandler{app: app}
 
-	req := &pb.ExecuteWorkflowNodeRequest{
-		GraphId:       "graph-audit-999",
-		InitialNodeId: "node-start-111",
+	payload, _ := structpb.NewStruct(map[string]interface{}{
+		"graph_id":        "graph-audit-999",
+		"initial_node_id": "node-start-111",
+		"node_name":       "Cache Audit Node",
+		"cache_contract": map[string]interface{}{
+			"collection_name": "test_coll",
+		},
+	})
+	req := &pb.ExecuteTaskRequest{
+		TaskSubject: "worker.cache.lookup",
 		Identity: &pb.InfrastructureIdentity{
 			JobId:    "job-audit-001",
 			TenantId: "t1",
 			AppId:    "a1",
 		},
-		StepId: "step-audit",
-		NodeConfig: &pb.NodeConfiguration{
-			NodeName: "Cache Audit Node",
-		},
-		Cache: &pb.CacheContract{
-			CollectionName: "test_coll",
-		},
+		StepId:  "step-audit",
+		Payload: payload,
 	}
 	data, _ := proto.Marshal(req)
 
@@ -303,13 +318,21 @@ func TestHandleMessage_BackgroundUpdatePayloadExtraction(t *testing.T) {
 	handler := &JetStreamHandler{app: app}
 
 	t.Run("Extract payload from NodeOutput", func(t *testing.T) {
-		req := &pb.ExecuteWorkflowNodeRequest{
-			GraphId:       "graph-bg-1",
-			InitialNodeId: "node-bg-1",
-			Identity:      &pb.InfrastructureIdentity{JobId: "job1", TenantId: "t1", AppId: "a1"},
-			NodeConfig:    &pb.NodeConfiguration{NodeName: "test"},
-			Cache:         &pb.CacheContract{CollectionName: "test_coll"},
-			NodeOutput:    unmarshalStruct(`{"extracted_key":"val1"}`),
+		payload, _ := structpb.NewStruct(map[string]interface{}{
+			"graph_id":        "graph-bg-1",
+			"initial_node_id": "node-bg-1",
+			"node_name":       "test",
+			"cache_contract": map[string]interface{}{
+				"collection_name": "test_coll",
+			},
+			"node_output": map[string]interface{}{
+				"extracted_key": "val1",
+			},
+		})
+		req := &pb.ExecuteTaskRequest{
+			TaskSubject: "worker.cache.background.update",
+			Identity:    &pb.InfrastructureIdentity{JobId: "job1", TenantId: "t1", AppId: "a1"},
+			Payload:     payload,
 		}
 		data, _ := proto.Marshal(req)
 		msg := &mockCacheMsg{data: data, subject: "worker.cache.background.update", numDeliv: 1}
@@ -322,12 +345,18 @@ func TestHandleMessage_BackgroundUpdatePayloadExtraction(t *testing.T) {
 	})
 
 	t.Run("Fails fast when NodeOutput is empty", func(t *testing.T) {
-		req := &pb.ExecuteWorkflowNodeRequest{
-			GraphId:       "graph-bg-2",
-			InitialNodeId: "node-bg-2",
-			Identity:      &pb.InfrastructureIdentity{JobId: "job1", TenantId: "t1", AppId: "a1"},
-			NodeConfig:    &pb.NodeConfiguration{NodeName: "test"},
-			Cache:         &pb.CacheContract{CollectionName: "test_coll"},
+		payload, _ := structpb.NewStruct(map[string]interface{}{
+			"graph_id":        "graph-bg-2",
+			"initial_node_id": "node-bg-2",
+			"node_name":       "test",
+			"cache_contract": map[string]interface{}{
+				"collection_name": "test_coll",
+			},
+		})
+		req := &pb.ExecuteTaskRequest{
+			TaskSubject: "worker.cache.background.update",
+			Identity:    &pb.InfrastructureIdentity{JobId: "job1", TenantId: "t1", AppId: "a1"},
+			Payload:     payload,
 		}
 		data, _ := proto.Marshal(req)
 		msg := &mockCacheMsg{data: data, subject: "worker.cache.background.update", numDeliv: 1}
@@ -346,13 +375,22 @@ func TestHandleMessage_ConcurrentStressTest(t *testing.T) {
 	app := application.NewSemanticCacheApp(embedMock, storeMock)
 	handler := &JetStreamHandler{app: app}
 
-	req := &pb.ExecuteWorkflowNodeRequest{
-		GraphId:       "graph-stress-99",
-		InitialNodeId: "node-stress-99",
-		Identity:      &pb.InfrastructureIdentity{JobId: "job-stress", TenantId: "t-stress", AppId: "a-stress"},
-		NodeConfig:    &pb.NodeConfiguration{NodeName: "stress_node"},
-		Cache:         &pb.CacheContract{CollectionName: "stress_coll", Confidence: 0.8},
-		NodeOutput:    unmarshalStruct(`{"stress":true}`),
+	payload, _ := structpb.NewStruct(map[string]interface{}{
+		"graph_id":        "graph-stress-99",
+		"initial_node_id": "node-stress-99",
+		"node_name":       "stress_node",
+		"cache_contract": map[string]interface{}{
+			"collection_name": "stress_coll",
+			"confidence":      0.8,
+		},
+		"node_output": map[string]interface{}{
+			"stress": true,
+		},
+	})
+	req := &pb.ExecuteTaskRequest{
+		TaskSubject: "worker.cache.lookup",
+		Identity:    &pb.InfrastructureIdentity{JobId: "job-stress", TenantId: "t-stress", AppId: "a-stress"},
+		Payload:     payload,
 	}
 	data, _ := proto.Marshal(req)
 

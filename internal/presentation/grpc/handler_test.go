@@ -115,8 +115,8 @@ func TestGRPCHandler_NilIdentityEdgeCases(t *testing.T) {
 
 	t.Run("QueryBlankDocument with Nil Identity", func(t *testing.T) {
 		_, err := h.QueryBlankDocument(ctx, &pb.QueryBlankDocumentRequest{
-			CollectionName:     "test",
-			Identity:           nil,
+			CollectionName: "test",
+			Identity:       nil,
 		})
 		if err == nil {
 			t.Fatalf("expected error with nil identity, got nil")
@@ -125,8 +125,8 @@ func TestGRPCHandler_NilIdentityEdgeCases(t *testing.T) {
 
 	t.Run("RegisterBlankDocument with Nil Identity and Empty Text", func(t *testing.T) {
 		_, err := h.RegisterBlankDocument(ctx, &pb.RegisterBlankDocumentRequest{
-			CollectionName:     "test",
-			Identity:           nil,
+			CollectionName: "test",
+			Identity:       nil,
 		})
 		if err == nil {
 			t.Fatalf("expected error with nil identity and empty text, got nil")

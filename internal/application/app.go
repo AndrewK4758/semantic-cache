@@ -65,7 +65,7 @@ func (a *SemanticCacheApp) CheckCache(ctx context.Context, contract *pb.CacheCon
 
 	collectionName := contract.GetCollectionName()
 	threshold := contract.GetConfidence()
-	
+
 	var text string
 	if contract.EmbeddingLookup != nil {
 		var strVal wrapperspb.StringValue

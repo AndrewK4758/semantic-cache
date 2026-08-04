@@ -5,13 +5,14 @@ import (
 	"encoding/json"
 	"fmt"
 	"strconv"
+	"strings"
 	"time"
 
 	pb "github.com/AndrewK4758/shared_protos"
 	"github.com/AndrewK4758/shared_utils/envutil"
+	"github.com/AndrewK4758/shared_utils/identityparser"
 	"github.com/AndrewK4758/shared_utils/logger"
 	"github.com/AndrewK4758/shared_utils/natsutil"
-	"github.com/AndrewK4758/shared_utils/workflowparser"
 	"github.com/doc_processor/semantic_cache_service/internal/application"
 	"github.com/nats-io/nats.go"
 	"github.com/nats-io/nats.go/jetstream"
@@ -67,7 +68,7 @@ func (h *JetStreamHandler) StartConsumers(ctx context.Context) error {
 			Durable:        "semantic_cache_service_consumer",
 			AckPolicy:      jetstream.AckExplicitPolicy,
 			AckWait:        60 * time.Second,
-			FilterSubjects: []string{"worker.cache.lookup", "worker.cache.background.update"},
+			FilterSubjects: []string{"worker.cache.lookup", "worker.cache.lookup.>", "worker.cache.background.update", "worker.cache.background.update.>"},
 			MaxAckPending:  maxAckPending,
 		})
 		if err == nil {
@@ -104,7 +105,7 @@ func (h *JetStreamHandler) handleMessage(msg jetstream.Msg) {
 		attempt = meta.NumDelivered
 	}
 
-	req := &pb.ExecuteWorkflowNodeRequest{}
+	req := &pb.ExecuteTaskRequest{}
 	unmarshalErr := proto.Unmarshal(msg.Data(), req)
 	if unmarshalErr != nil {
 		logger.Error("SemanticCache", "Failed to unmarshal request: %v", unmarshalErr)
@@ -112,17 +113,46 @@ func (h *JetStreamHandler) handleMessage(msg jetstream.Msg) {
 		return
 	}
 
-	parser := workflowparser.NewNodeRequestParser(req)
-	if err := parser.Validate(); err != nil {
-		logger.Error("SemanticCache", "Invalid request: %v", err)
-		h.sendErrorReply(ctx, msg, err.Error(), parser.GetIdentity())
+	if err := identityparser.NewIdentityParser(req.GetIdentity()).Validate(true); err != nil {
+		logger.Error("SemanticCache", "FAIL-FAST ASSERTION FAILED: invalid identity - %v", err)
+		h.sendErrorReply(ctx, msg, fmt.Sprintf("FAIL-FAST ASSERTION FAILED: %v", err), req.GetIdentity())
 		msg.Term()
 		return
 	}
 
-	t, a, j := parser.ExtractIdentity()
-	graphID := parser.GetGraphId()
-	initialNodeID := parser.GetInitialNodeId()
+	if req.GetTaskSubject() == "" {
+		err := fmt.Errorf("missing required TaskSubject")
+		logger.Error("SemanticCache", "FAIL-FAST ASSERTION FAILED: %v", err)
+		h.sendErrorReply(ctx, msg, fmt.Sprintf("FAIL-FAST ASSERTION FAILED: %v", err), req.GetIdentity())
+		msg.Term()
+		return
+	}
+
+	t, a, j := natsutil.ExtractIdentity(req.Identity)
+
+	payloadMap := map[string]interface{}{}
+	if req.Payload != nil {
+		payloadMap = req.Payload.AsMap()
+	}
+
+	reqBytes, err := protojson.Marshal(req)
+	if err == nil {
+		logger.Info("SemanticCache", "DEQUEUED Input Payload: %s", string(reqBytes))
+	} else {
+		payloadBytes, _ := json.Marshal(payloadMap)
+		logger.Info("SemanticCache", "DEQUEUED Input Payload: %s", string(payloadBytes))
+	}
+
+	getString := func(k string) string {
+		if v, ok := payloadMap[k].(string); ok {
+			return v
+		}
+		return ""
+	}
+
+	graphID := getString("graph_id")
+	initialNodeID := getString("initial_node_id")
+	nodeName := getString("node_name")
 
 	natsutil.LogJetStreamEvent(natsutil.JetStreamLogEvent{
 		Component: "SemanticCache",
@@ -139,7 +169,7 @@ func (h *JetStreamHandler) handleMessage(msg jetstream.Msg) {
 
 	if err == nil && meta != nil && meta.NumDelivered > 5 {
 		logger.Info("SemanticCache", "Message exceeded max delivery attempts, terminating (graph_id: %s, initial_node_id: %s)", graphID, initialNodeID)
-		h.sendErrorReply(ctx, msg, "Action failed after multiple retries due to rate limits.", parser.GetIdentity())
+		h.sendErrorReply(ctx, msg, "Action failed after multiple retries due to rate limits.", req.Identity)
 		natsutil.LogJetStreamEvent(natsutil.JetStreamLogEvent{
 			Component:  "SemanticCache",
 			Event:      "TERMINATED",
@@ -190,9 +220,16 @@ func (h *JetStreamHandler) handleMessage(msg jetstream.Msg) {
 
 	logger.Info("SemanticCache", "Received action request on subject: %s (graph_id: %s, initial_node_id: %s)", subject, graphID, initialNodeID)
 
-	cacheConfig := parser.GetCacheContract()
-	if cacheConfig == nil || parser.GetNodeName() == "" {
-		if err := h.sendErrorReply(ctx, msg, "missing NodeConfig or Cache config", parser.GetIdentity()); err != nil {
+	var cacheConfig *pb.CacheContract
+	if cc, ok := payloadMap["cache_contract"]; ok {
+		if b, err := json.Marshal(cc); err == nil {
+			cacheConfig = &pb.CacheContract{}
+			protojson.Unmarshal(b, cacheConfig)
+		}
+	}
+
+	if cacheConfig == nil || nodeName == "" {
+		if err := h.sendErrorReply(ctx, msg, "missing NodeConfig or Cache config", req.Identity); err != nil {
 			logger.Error("SemanticCache", "Failed to send error reply: %v", err)
 		}
 		msg.Term()
@@ -200,11 +237,13 @@ func (h *JetStreamHandler) handleMessage(msg jetstream.Msg) {
 	}
 
 	metadata := make(map[string]any)
-	for k, v := range parser.GetMetadata() {
-		metadata[k] = v
+	if md, ok := payloadMap["metadata"].(map[string]interface{}); ok {
+		for k, v := range md {
+			metadata[k] = v
+		}
 	}
 
-	if subject == "worker.cache.lookup" {
+	if strings.HasPrefix(subject, "worker.cache.lookup") {
 		// Cache Lookup
 		hit, payload, confidence, err := h.app.CheckCache(ctx, cacheConfig, req.Identity, metadata)
 		if err != nil {
@@ -256,15 +295,16 @@ func (h *JetStreamHandler) handleMessage(msg jetstream.Msg) {
 			DurationMs: durationMs,
 		})
 
-	} else if subject == "worker.cache.background.update" {
-		if req.NodeOutput == nil {
-			logger.Error("SemanticCache", "StoreExtraction failed: missing NodeOutput in request")
-			h.sendErrorReply(ctx, msg, "missing NodeOutput for cache update", req.Identity)
+	} else if strings.HasPrefix(subject, "worker.cache.background.update") {
+		nodeOutputRaw := payloadMap["node_output"]
+		if nodeOutputRaw == nil {
+			logger.Error("SemanticCache", "StoreExtraction failed: missing node_output in payload")
+			h.sendErrorReply(ctx, msg, "missing node_output for cache update", req.Identity)
 			msg.Term()
 			return
 		}
 
-		payloadBytes, err := protojson.Marshal(req.NodeOutput)
+		payloadBytes, err := json.Marshal(nodeOutputRaw)
 		if err != nil {
 			logger.Error("SemanticCache", "StoreExtraction failed to marshal NodeOutput: %v", err)
 			h.sendErrorReply(ctx, msg, "failed to marshal NodeOutput", req.Identity)
@@ -383,6 +423,13 @@ func (h *JetStreamHandler) sendSuccessReply(ctx context.Context, msg jetstream.M
 	resp := &pb.PerformActionResponse{
 		Success:      true,
 		ActionResult: &resultStruct,
+	}
+	outBytes, err := protojson.Marshal(&resultStruct)
+	if err == nil {
+		logger.Info("SemanticCache", "DISPATCHING ActionResult Output: %s", string(outBytes))
+	} else {
+		outJson, _ := json.Marshal(resultStruct.AsMap())
+		logger.Info("SemanticCache", "DISPATCHING ActionResult Output: %s", string(outJson))
 	}
 	return h.publishReply(ctx, replySubj, resp, reqIdentity)
 }

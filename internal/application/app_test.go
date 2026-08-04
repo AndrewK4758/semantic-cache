@@ -8,8 +8,8 @@ import (
 	pb "github.com/AndrewK4758/shared_protos"
 	"github.com/doc_processor/semantic_cache_service/internal/application"
 	"github.com/doc_processor/semantic_cache_service/internal/domain"
-	"google.golang.org/protobuf/types/known/structpb"
 	"google.golang.org/protobuf/types/known/anypb"
+	"google.golang.org/protobuf/types/known/structpb"
 )
 
 // --- Mocks ---
@@ -390,10 +390,10 @@ func TestSemanticCacheApp_StoreExtraction(t *testing.T) {
 			embedMock := &mockEmbeddingService{generateFn: tt.embedFn}
 			storeMock := &mockVectorStore{upsertFn: tt.upsertFn}
 			app := application.NewSemanticCacheApp(embedMock, storeMock)
-			
+
 			val, _ := structpb.NewValue(tt.args.text)
 			anyPayload, _ := anypb.New(val)
-			
+
 			err := app.StoreExtraction(context.Background(), "test_collection", nil, tt.args.metadata, tt.args.extractedPayload, anyPayload)
 
 			if (err != nil) != tt.expectError {
