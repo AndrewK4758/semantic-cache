@@ -93,16 +93,23 @@ func (a *SemanticCacheApp) CheckCache(ctx context.Context, contract *pb.CacheCon
 	}
 
 	// STAGE 1: METADATA LOOKUP (Bypass LLM embedding generation)
+	// We only bypass if a unique 'TemplateHash' is provided. If only generic metadata 
+	// (like subject_class) is provided, we must fall through to Stage 2 to use embeddings.
 	if len(metaMap) > 0 {
-		logger.Info("SemanticCache", "INFO: [SemanticCacheApp] Stage 1: Attempting Exact Metadata Match with Metadata: %+v", metaMap)
-		metaResults, metaErr := a.store.GetByMetadata(ctx, collectionName, identity, metaMap)
-		if metaErr == nil && len(metaResults) > 0 {
-			topMatch := metaResults[0]
-			logger.Info("SemanticCache", "INFO: [SemanticCacheApp] CACHE HIT [METADATA_EXACT_MATCH]! Bypassing embedding generation.")
-			logger.Info("SemanticCache", "INFO: [SemanticCacheApp] Cached Payload Output:\n%s", topMatch.Record.JSONPayload)
-			return true, topMatch.Record.JSONPayload, 1.0, nil
+		_, hasTemplateHash := metaMap["TemplateHash"]
+		if hasTemplateHash {
+			logger.Info("SemanticCache", "INFO: [SemanticCacheApp] Stage 1: Attempting Exact Metadata Match with Metadata: %+v", metaMap)
+			metaResults, metaErr := a.store.GetByMetadata(ctx, collectionName, identity, metaMap)
+			if metaErr == nil && len(metaResults) > 0 {
+				topMatch := metaResults[0]
+				logger.Info("SemanticCache", "INFO: [SemanticCacheApp] CACHE HIT [METADATA_EXACT_MATCH]! Bypassing embedding generation.")
+				logger.Info("SemanticCache", "INFO: [SemanticCacheApp] Cached Payload Output:\n%s", topMatch.Record.JSONPayload)
+				return true, topMatch.Record.JSONPayload, 1.0, nil
+			}
+			logger.Info("SemanticCache", "INFO: [SemanticCacheApp] Stage 1 Miss: No exact metadata match found. Proceeding to Stage 2 Embedding Fallback.")
+		} else {
+			logger.Info("SemanticCache", "INFO: [SemanticCacheApp] Stage 1 Skipped: No TemplateHash provided. Falling back to Stage 2 (subject_class + embeddings).")
 		}
-		logger.Info("SemanticCache", "INFO: [SemanticCacheApp] Stage 1 Miss: No exact metadata match found. Proceeding to Stage 2 Embedding Fallback.")
 	}
 
 	// STAGE 2: EMBEDDING FALLBACK
@@ -124,8 +131,8 @@ func (a *SemanticCacheApp) CheckCache(ctx context.Context, contract *pb.CacheCon
 		logger.Info("SemanticCache", "INFO: [SemanticCacheApp] Stage 2: Using pre-computed vector from EmbeddingLookup of length %d", len(vector))
 	}
 
-	logger.Info("SemanticCache", "INFO: [SemanticCacheApp] Searching Qdrant Vector Store for top 1 match...")
-	results, searchErr := a.store.Search(ctx, collectionName, vector, identity, nil, 1)
+	logger.Info("SemanticCache", "INFO: [SemanticCacheApp] Searching Qdrant Vector Store for top 1 match with Metadata Filter: %+v", metaMap)
+	results, searchErr := a.store.Search(ctx, collectionName, vector, identity, metaMap, 1)
 	if searchErr != nil {
 		logger.Info("SemanticCache", "ERROR: [SemanticCacheApp] Failed to search vector store: %v", searchErr)
 		return false, "", 0, fmt.Errorf("action failed for job CheckCache: vector search error: %w", searchErr)
@@ -149,11 +156,25 @@ func (a *SemanticCacheApp) CheckCache(ctx context.Context, contract *pb.CacheCon
 
 // StoreExtraction processes the Store Extraction use case.
 func (a *SemanticCacheApp) StoreExtraction(ctx context.Context, collectionName string, identity *pb.InfrastructureIdentity, metadata map[string]any, extractedPayload string, embeddingPayload *anypb.Any) error {
+	if _, ok := metadata["subject_class"]; !ok {
+		logger.Error("SemanticCache", "FAIL-FAST ASSERTION FAILED [StoreExtraction]: subject_class is missing from metadata")
+		return fmt.Errorf("action failed for job StoreExtraction: missing required metadata key 'subject_class'")
+	}
+	if _, ok := metadata["TemplateHash"]; !ok {
+		logger.Error("SemanticCache", "FAIL-FAST ASSERTION FAILED [StoreExtraction]: TemplateHash is missing from metadata")
+		return fmt.Errorf("action failed for job StoreExtraction: missing required metadata key 'TemplateHash'")
+	}
+
 	var text string
 	if embeddingPayload != nil {
-		var val structpb.Value
-		if err := embeddingPayload.UnmarshalTo(&val); err == nil {
-			text = val.GetStringValue()
+		var strVal wrapperspb.StringValue
+		if err := embeddingPayload.UnmarshalTo(&strVal); err == nil {
+			text = strVal.GetValue()
+		} else {
+			var val structpb.Value
+			if err2 := embeddingPayload.UnmarshalTo(&val); err2 == nil {
+				text = val.GetStringValue()
+			}
 		}
 	}
 	logger.Info("SemanticCache", "INFO: [SemanticCacheApp] StoreExtraction invoked. Collection: %s, Input Text Length: %d, Payload Length: %d", collectionName, len(text), len(extractedPayload))

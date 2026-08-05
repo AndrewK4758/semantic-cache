@@ -2,6 +2,7 @@ package messaging
 
 import (
 	"context"
+	"encoding/base64"
 	"encoding/json"
 	"fmt"
 	"strconv"
@@ -19,6 +20,7 @@ import (
 
 	"google.golang.org/protobuf/encoding/protojson"
 	"google.golang.org/protobuf/proto"
+	"google.golang.org/protobuf/types/known/anypb"
 	"google.golang.org/protobuf/types/known/structpb"
 )
 
@@ -113,19 +115,10 @@ func (h *JetStreamHandler) handleMessage(msg jetstream.Msg) {
 		return
 	}
 
-	if err := identityparser.NewIdentityParser(req.GetIdentity()).Validate(true); err != nil {
-		logger.Error("SemanticCache", "FAIL-FAST ASSERTION FAILED: invalid identity - %v", err)
-		h.sendErrorReply(ctx, msg, fmt.Sprintf("FAIL-FAST ASSERTION FAILED: %v", err), req.GetIdentity())
-		msg.Term()
-		return
-	}
+	identityparser.NewIdentityParser(req.GetIdentity()).MustValidate(true, "JetStreamConsume")
 
 	if req.GetTaskSubject() == "" {
-		err := fmt.Errorf("missing required TaskSubject")
-		logger.Error("SemanticCache", "FAIL-FAST ASSERTION FAILED: %v", err)
-		h.sendErrorReply(ctx, msg, fmt.Sprintf("FAIL-FAST ASSERTION FAILED: %v", err), req.GetIdentity())
-		msg.Term()
-		return
+		panic(fmt.Errorf("action failed for job JetStreamConsume: missing required TaskSubject"))
 	}
 
 	t, a, j := natsutil.ExtractIdentity(req.Identity)
@@ -152,7 +145,13 @@ func (h *JetStreamHandler) handleMessage(msg jetstream.Msg) {
 
 	graphID := getString("graph_id")
 	initialNodeID := getString("initial_node_id")
-	nodeName := getString("node_name")
+	
+	nodeName := ""
+	if nc, ok := payloadMap["node_config"].(map[string]interface{}); ok {
+		if nn, ok := nc["node_name"].(string); ok {
+			nodeName = nn
+		}
+	}
 
 	natsutil.LogJetStreamEvent(natsutil.JetStreamLogEvent{
 		Component: "SemanticCache",
@@ -221,19 +220,39 @@ func (h *JetStreamHandler) handleMessage(msg jetstream.Msg) {
 	logger.Info("SemanticCache", "Received action request on subject: %s (graph_id: %s, initial_node_id: %s)", subject, graphID, initialNodeID)
 
 	var cacheConfig *pb.CacheContract
-	if cc, ok := payloadMap["cache_contract"]; ok {
-		if b, err := json.Marshal(cc); err == nil {
-			cacheConfig = &pb.CacheContract{}
-			protojson.Unmarshal(b, cacheConfig)
+	if cc, ok := payloadMap["cache"].(map[string]interface{}); ok {
+		cacheConfig = &pb.CacheContract{}
+		if colName, ok := cc["collection_name"].(string); ok {
+			cacheConfig.CollectionName = colName
+		}
+		if conf, ok := cc["confidence"].(float64); ok {
+			cacheConfig.Confidence = float32(conf)
+		}
+		if meta, ok := cc["metadata_lookup"].(map[string]interface{}); ok {
+			if st, err := structpb.NewStruct(meta); err == nil {
+				cacheConfig.MetadataLookup = st
+			}
+		}
+		if emb, ok := cc["embedding_lookup"].(map[string]interface{}); ok {
+			anyMsg := &anypb.Any{}
+			if typeUrl, ok := emb["type_url"].(string); ok {
+				anyMsg.TypeUrl = typeUrl
+			}
+			if val, ok := emb["value"].(string); ok {
+				if decoded, err := base64.StdEncoding.DecodeString(val); err == nil {
+					anyMsg.Value = decoded
+				}
+			}
+			cacheConfig.EmbeddingLookup = anyMsg
 		}
 	}
 
-	if cacheConfig == nil || nodeName == "" {
-		if err := h.sendErrorReply(ctx, msg, "missing NodeConfig or Cache config", req.Identity); err != nil {
-			logger.Error("SemanticCache", "Failed to send error reply: %v", err)
-		}
-		msg.Term()
-		return
+	if cacheConfig == nil {
+		panic(fmt.Errorf("action failed for job %s: missing cache config in payload", j))
+	}
+
+	if nodeName == "" {
+		panic(fmt.Errorf("action failed for job %s: missing node_config.node_name in payload", j))
 	}
 
 	metadata := make(map[string]any)

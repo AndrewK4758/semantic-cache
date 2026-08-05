@@ -30,7 +30,7 @@ func main() {
 	grpcPort := getEnv("GRPC_PORT", "11115")
 	qdrantAddr := getEnv("QDRANT_URL", "localhost:6334")
 	openaiURL := getEnv("EMBEDDING_BASE_URL", getEnv("OPENAI_BASE_URL", "http://localhost:11434/v1"))
-	openaiModel := envutil.GetEmbeddingModel()
+	openaiModel := envutil.MustGetEmbeddingModel()
 	collectionName := getEnv("QDRANT_COLLECTION", "default_cache")
 
 	// Infrastructure
