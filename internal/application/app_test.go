@@ -96,7 +96,7 @@ func TestSemanticCacheApp_CheckCache(t *testing.T) {
 			},
 			args: args{
 				text:      "some text",
-				metadata:  map[string]any{"filename": "test.pdf"},
+				metadata:  map[string]any{"filename": "test.pdf", "TemplateHash": "hash"},
 				threshold: 0.90,
 			},
 			expectedHit:        true,
@@ -143,7 +143,7 @@ func TestSemanticCacheApp_CheckCache(t *testing.T) {
 			},
 			args: args{
 				text:      "sample invoice text",
-				metadata:  map[string]any{"document_type": "invoice"},
+				metadata:  map[string]any{"document_type": "invoice", "TemplateHash": "hash"},
 				threshold: 0.90,
 			},
 			expectedHit:        true,
@@ -354,7 +354,7 @@ func TestSemanticCacheApp_StoreExtraction(t *testing.T) {
 			name: "Success",
 			args: args{
 				text:             "sample invoice text",
-				metadata:         map[string]any{"document_type": "invoice"},
+				metadata:         map[string]any{"document_type": "invoice", "subject_class": "INVOICE", "document_title": "Invoice 123", "TemplateHash": "hash"},
 				extractedPayload: `{"amount": 100}`,
 			},
 			expectError: false,
@@ -366,7 +366,7 @@ func TestSemanticCacheApp_StoreExtraction(t *testing.T) {
 			},
 			args: args{
 				text:             "sample invoice text",
-				metadata:         map[string]any{"document_type": "invoice"},
+				metadata:         map[string]any{"document_type": "invoice", "subject_class": "INVOICE", "document_title": "Invoice 123", "TemplateHash": "hash"},
 				extractedPayload: `{"amount": 100}`,
 			},
 			expectError: true,
@@ -378,7 +378,7 @@ func TestSemanticCacheApp_StoreExtraction(t *testing.T) {
 			},
 			args: args{
 				text:             "sample invoice text",
-				metadata:         map[string]any{"document_type": "invoice"},
+				metadata:         map[string]any{"document_type": "invoice", "subject_class": "INVOICE", "document_title": "Invoice 123", "TemplateHash": "hash"},
 				extractedPayload: `{"amount": 100}`,
 			},
 			expectError: true,
@@ -394,7 +394,8 @@ func TestSemanticCacheApp_StoreExtraction(t *testing.T) {
 			val, _ := structpb.NewValue(tt.args.text)
 			anyPayload, _ := anypb.New(val)
 
-			err := app.StoreExtraction(context.Background(), "test_collection", nil, tt.args.metadata, tt.args.extractedPayload, anyPayload)
+			identity := &pb.InfrastructureIdentity{TenantId: "t1", AppId: "a1", JobId: "j1"}
+			err := app.StoreExtraction(context.Background(), "test_collection", identity, tt.args.metadata, tt.args.extractedPayload, anyPayload)
 
 			if (err != nil) != tt.expectError {
 				t.Fatalf("expected error: %v, got: %v", tt.expectError, err)
@@ -482,10 +483,12 @@ func TestSemanticCacheApp_CheckCache_NilContract(t *testing.T) {
 		JobId:    "job_1",
 	}
 
-	_, _, _, err := app.CheckCache(context.Background(), nil, identity, nil)
-	if err == nil {
-		t.Fatalf("expected error when contract is nil, got nil")
-	}
+	defer func() {
+		if r := recover(); r == nil {
+			t.Fatalf("expected panic when contract is nil, got none")
+		}
+	}()
+	app.CheckCache(context.Background(), nil, identity, nil)
 }
 
 func TestSemanticCacheApp_CheckCache_PrecomputedVector(t *testing.T) {
@@ -565,7 +568,7 @@ func TestSemanticCacheApp_StoreExtraction_PrecomputedVector(t *testing.T) {
 
 	identity := &pb.InfrastructureIdentity{TenantId: "t1", AppId: "a1", JobId: "j1"}
 
-	err := app.StoreExtraction(context.Background(), "test_coll", identity, nil, `{"data":1}`, anyVec)
+	err := app.StoreExtraction(context.Background(), "test_coll", identity, map[string]any{"subject_class": "CLASS", "document_title": "Title", "TemplateHash": "hash"}, `{"data":1}`, anyVec)
 	if err != nil {
 		t.Fatalf("unexpected error: %v", err)
 	}

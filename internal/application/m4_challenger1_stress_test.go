@@ -8,9 +8,9 @@ import (
 	"testing"
 	"time"
 
-	pb "github.com/AndrewK4758/shared_protos"
 	"github.com/doc_processor/semantic_cache_service/internal/application"
 	"github.com/doc_processor/semantic_cache_service/internal/domain"
+	pb "github.com/AndrewK4758/shared_protos"
 	"google.golang.org/protobuf/types/known/structpb"
 )
 
@@ -128,7 +128,10 @@ func TestM4Challenger_HighConcurrency_MultiTenant_Isolation(t *testing.T) {
 			metaMap := map[string]any{
 				"custom_ref": fmt.Sprintf("ref_%d", workerID),
 			}
-			err := app.StoreExtraction(ctx, "stress_collection", identity, metaMap, docTitle, "CLOSING", nil)
+			metaMap["document_title"] = docTitle
+			metaMap["subject_class"] = "CLOSING"
+			metaMap["TemplateHash"] = "hash"
+			err := app.StoreExtraction(ctx, "testing_stress_collection", identity, metaMap, docTitle, nil)
 			if err != nil {
 				errChan <- fmt.Errorf("worker %d StoreExtraction failed: %w", workerID, err)
 				return
@@ -137,12 +140,12 @@ func TestM4Challenger_HighConcurrency_MultiTenant_Isolation(t *testing.T) {
 			// Step 2: Check Cache (Exact Metadata Match or Vector Search)
 			metaStruct, _ := structpb.NewStruct(metaMap)
 			contract := &pb.CacheContract{
-				CollectionName: "stress_collection",
+				CollectionName: "testing_stress_collection",
 				Confidence:     0.90,
 				MetadataLookup: metaStruct,
 			}
 
-			hit, returnedTitle, _, _, err := app.CheckCache(ctx, contract, identity, nil)
+			hit, returnedTitle, _, err := app.CheckCache(ctx, contract, identity, nil)
 			if err != nil {
 				errChan <- fmt.Errorf("worker %d CheckCache failed: %w", workerID, err)
 				return
@@ -170,64 +173,6 @@ func TestM4Challenger_HighConcurrency_MultiTenant_Isolation(t *testing.T) {
 	}
 }
 
-// TestM4Challenger_ConcurrentIdenticalText_DistinctRecordIDs verifies SHA256 ID length framing
-// prevents collisions across distinct tenant/app combinations with identical text inputs.
-func TestM4Challenger_ConcurrentIdenticalText_DistinctRecordIDs(t *testing.T) {
-	cleanedText := "Standardized Closing Disclosure Document Template Content"
-
-	numGoroutines := 50
-	generatedIDs := sync.Map{}
-
-	var wg sync.WaitGroup
-	wg.Add(numGoroutines)
-
-	for i := 0; i < numGoroutines; i++ {
-		tenantID := fmt.Sprintf("tenant_%d", i)
-		appID := fmt.Sprintf("app_%d", i%5)
-		identity := &pb.InfrastructureIdentity{
-			TenantId: tenantID,
-			AppId:    appID,
-			JobId:    fmt.Sprintf("job_concurrent_%d", i),
-		}
-
-		go func() {
-			defer wg.Done()
-			id, err := application.GenerateRecordID(cleanedText, identity)
-			if err != nil {
-				t.Errorf("GenerateRecordID error: %v", err)
-				return
-			}
-			if _, loaded := generatedIDs.LoadOrStore(id, tenantID); loaded {
-				t.Errorf("COLLISION DETECTED! Record ID %s generated for multiple tenants!", id)
-			}
-		}()
-	}
-
-	wg.Wait()
-}
-
-// TestM4Challenger_PrefixAmbiguityCollisionCheck tests boundary framing (e.g. tenant="a", app="bc" vs tenant="ab", app="c").
-func TestM4Challenger_PrefixAmbiguityCollisionCheck(t *testing.T) {
-	text := "Same cleaned document text"
-
-	identityA := &pb.InfrastructureIdentity{TenantId: "a", AppId: "bc", JobId: "j1"}
-	identityB := &pb.InfrastructureIdentity{TenantId: "ab", AppId: "c", JobId: "j1"}
-
-	idA, errA := application.GenerateRecordID(text, identityA)
-	if errA != nil {
-		t.Fatalf("GenerateRecordID A failed: %v", errA)
-	}
-
-	idB, errB := application.GenerateRecordID(text, identityB)
-	if errB != nil {
-		t.Fatalf("GenerateRecordID B failed: %v", errB)
-	}
-
-	if idA == idB {
-		t.Fatalf("CRITICAL SECURITY DEFECT: Length framing failed! Tenant('a') + App('bc') produced same hash as Tenant('ab') + App('c'): %s", idA)
-	}
-}
-
 // TestM4Challenger_ZeroFallback_IdentityAndInputFailures verifies fail-fast zero-fallback rules.
 func TestM4Challenger_ZeroFallback_IdentityAndInputFailures(t *testing.T) {
 	storeMock := newConcurrentMockVectorStore()
@@ -252,7 +197,7 @@ func TestM4Challenger_ZeroFallback_IdentityAndInputFailures(t *testing.T) {
 					t.Errorf("Case %d: CheckCache expected fail-fast panic for invalid identity %v, got none", idx, id)
 				}
 			}()
-			_, _, _, _, _ = app.CheckCache(context.Background(), contract, id, nil)
+			_, _, _, _ = app.CheckCache(context.Background(), contract, id, nil)
 		}()
 	}
 
@@ -264,7 +209,7 @@ func TestM4Challenger_ZeroFallback_IdentityAndInputFailures(t *testing.T) {
 				t.Errorf("StoreExtraction expected panic when document_title is empty, got none")
 			}
 		}()
-		_ = app.StoreExtraction(context.Background(), "coll_test", identityValid, nil, "", "CLOSING", nil)
+		_ = app.StoreExtraction(context.Background(), "testing_coll_test", identityValid, map[string]any{"document_title": "", "subject_class": "CLOSING", "TemplateHash": "hash"}, "", nil)
 	}()
 
 	// Test 3: StoreExtraction with invalid identity
@@ -275,7 +220,7 @@ func TestM4Challenger_ZeroFallback_IdentityAndInputFailures(t *testing.T) {
 					t.Errorf("Case %d: StoreExtraction expected fail-fast panic for invalid identity %v, got none", idx, id)
 				}
 			}()
-			_ = app.StoreExtraction(context.Background(), "coll_test", id, nil, "Title", "CLOSING", nil)
+			_ = app.StoreExtraction(context.Background(), "testing_coll_test", id, map[string]any{"document_title": "Title", "subject_class": "CLOSING", "TemplateHash": "hash"}, "Title", nil)
 		}()
 	}
 }

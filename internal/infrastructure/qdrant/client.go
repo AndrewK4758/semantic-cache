@@ -80,6 +80,9 @@ func (c *Client) Search(ctx context.Context, collectionName string, vector []flo
 	if collectionName == "" {
 		collectionName = c.defaultCollection
 	}
+	if collectionName == "" {
+		panic("collectionName is required")
+	}
 
 	conditions := buildConditions(identity, metadata)
 	filter := &pb.Filter{
@@ -127,6 +130,9 @@ func (c *Client) Upsert(ctx context.Context, collectionName string, record domai
 	if collectionName == "" {
 		collectionName = c.defaultCollection
 	}
+	if collectionName == "" {
+		panic("collectionName is required")
+	}
 
 	// Create UUID string from hex: 8-4-4-4-12
 	if len(record.ID) >= 32 {
@@ -140,10 +146,11 @@ func (c *Client) Upsert(ctx context.Context, collectionName string, record domai
 		},
 	}
 
-	payload := map[string]*pb.Value{
-		"json_payload": {
+	payload := map[string]*pb.Value{}
+	if record.JSONPayload != "" {
+		payload["json_payload"] = &pb.Value{
 			Kind: &pb.Value_StringValue{StringValue: record.JSONPayload},
-		},
+		}
 	}
 
 	if record.Identity != nil {
@@ -153,12 +160,13 @@ func (c *Client) Upsert(ctx context.Context, collectionName string, record domai
 		if record.Identity.AppId != "" {
 			payload["app_id"] = &pb.Value{Kind: &pb.Value_StringValue{StringValue: record.Identity.AppId}}
 		}
-		if record.Identity.JobId != "" {
-			payload["job_id"] = &pb.Value{Kind: &pb.Value_StringValue{StringValue: record.Identity.JobId}}
-		}
 	}
 
 	for k, v := range record.Metadata {
+		switch k {
+		case "json_payload", "email_text", "raw_email", "inference_input", "inbound_email_text", "EmailBody", "job_id":
+			continue
+		}
 		if strVal, ok := v.(string); ok {
 			payload[k] = &pb.Value{
 				Kind: &pb.Value_StringValue{StringValue: strVal},
@@ -199,6 +207,9 @@ func (c *Client) Upsert(ctx context.Context, collectionName string, record domai
 func (c *Client) CheckMetadata(ctx context.Context, collectionName string, identity *docpb.InfrastructureIdentity, metadata map[string]any) (bool, error) {
 	if collectionName == "" {
 		collectionName = c.defaultCollection
+	}
+	if collectionName == "" {
+		panic("collectionName is required")
 	}
 
 	conditions := buildConditions(identity, metadata)
@@ -242,6 +253,9 @@ func (c *Client) CheckMetadata(ctx context.Context, collectionName string, ident
 func (c *Client) GetByMetadata(ctx context.Context, collectionName string, identity *docpb.InfrastructureIdentity, metadata map[string]any) ([]domain.SearchResult, error) {
 	if collectionName == "" {
 		collectionName = c.defaultCollection
+	}
+	if collectionName == "" {
+		panic("collectionName is required")
 	}
 
 	conditions := buildConditions(identity, metadata)

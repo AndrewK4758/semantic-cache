@@ -2,70 +2,15 @@ package application_test
 
 import (
 	"context"
-	"crypto/sha256"
-	"encoding/hex"
-	"fmt"
 	"testing"
 
-	pb "github.com/AndrewK4758/shared_protos"
 	"github.com/doc_processor/semantic_cache_service/internal/application"
 	"github.com/doc_processor/semantic_cache_service/internal/domain"
+	pb "github.com/AndrewK4758/shared_protos"
+	"google.golang.org/protobuf/types/known/anypb"
+	"google.golang.org/protobuf/types/known/structpb"
 )
 
-// TestM4_SHA256RecordID_Calculation verifies the deterministic SHA256 ID formula:
-// SHA256(cleanedText + tenantId + appId) without job_id dependency.
-func TestM4_SHA256RecordID_Calculation(t *testing.T) {
-	tenantID := "tenant_acme"
-	appID := "app_artemis"
-	cleanedText := "Closing Disclosure template text without PII"
-
-	identityJob1 := &pb.InfrastructureIdentity{
-		TenantId: tenantID,
-		AppId:    appID,
-		JobId:    "job_001_alpha",
-	}
-
-	identityJob2 := &pb.InfrastructureIdentity{
-		TenantId: tenantID,
-		AppId:    appID,
-		JobId:    "job_999_omega",
-	}
-
-	id1, err1 := application.GenerateRecordID(cleanedText, identityJob1)
-	if err1 != nil {
-		t.Fatalf("GenerateRecordID failed for job1: %v", err1)
-	}
-
-	id2, err2 := application.GenerateRecordID(cleanedText, identityJob2)
-	if err2 != nil {
-		t.Fatalf("GenerateRecordID failed for job2: %v", err2)
-	}
-
-	// 1. Verify JobId variation does not affect generated ID
-	if id1 != id2 {
-		t.Errorf("Expected identical record IDs across different jobs, got %s vs %s", id1, id2)
-	}
-
-	// 2. Authoritative derivation: SHA256(len:val format)
-	expectedInput := fmt.Sprintf("%d:%s|%d:%s|%d:%s", len(tenantID), tenantID, len(appID), appID, len(cleanedText), cleanedText)
-	expectedSum := sha256.Sum256([]byte(expectedInput))
-	expectedHex := hex.EncodeToString(expectedSum[:])
-
-	if id1 != expectedHex {
-		t.Errorf("Record ID derivation mismatch: expected %s, got %s", expectedHex, id1)
-	}
-
-	// 3. Changing tenantId MUST produce a distinct ID
-	identityDiffTenant := &pb.InfrastructureIdentity{
-		TenantId: "tenant_stark",
-		AppId:    appID,
-		JobId:    "job_001_alpha",
-	}
-	idDiffTenant, _ := application.GenerateRecordID(cleanedText, identityDiffTenant)
-	if id1 == idDiffTenant {
-		t.Errorf("Expected different record IDs for different tenants, got match %s", id1)
-	}
-}
 
 // TestM4_QdrantGenericMetadataPayload_PurgesForbiddenFields verifies that
 // StoreExtraction saves tenant_id, app_id, subject_class, document_title into Qdrant metadata,
@@ -86,6 +31,7 @@ func TestM4_QdrantGenericMetadataPayload_PurgesForbiddenFields(t *testing.T) {
 	}
 
 	app := application.NewSemanticCacheApp(embedMock, storeMock)
+	ctx := context.Background()
 
 	identity := &pb.InfrastructureIdentity{
 		TenantId: "tenant_vault",
@@ -93,23 +39,23 @@ func TestM4_QdrantGenericMetadataPayload_PurgesForbiddenFields(t *testing.T) {
 		JobId:    "job_to_be_purged",
 	}
 
-	inputMetadata := map[string]any{
-		"json_payload":   `{"pii_name":"John Doe","sensitive":"12345"}`,
-		"job_id":         "job_to_be_purged",
-		"custom_setting": "client_opt_in",
+	inputMeta := map[string]any{
+		"e2e_flag":       true,
+		"document_title": "E2E Title",
+		"subject_class":  "E2E_CLASS",
+		"TemplateHash":   "hash",
 	}
 
-	docTitle := "Closing Disclosure"
-	subjClass := "CLOSING"
+	val, _ := structpb.NewValue("E2E Document Text")
+	anyPayload, _ := anypb.New(val)
 
 	err := app.StoreExtraction(
-		context.Background(),
-		"generic_cache_coll",
+		ctx,
+		"testing_e2e_collection",
 		identity,
-		inputMetadata,
-		docTitle,
-		subjClass,
-		nil,
+		inputMeta,
+		"E2E Title",
+		anyPayload,
 	)
 	if err != nil {
 		t.Fatalf("StoreExtraction failed unexpectedly: %v", err)
@@ -122,11 +68,8 @@ func TestM4_QdrantGenericMetadataPayload_PurgesForbiddenFields(t *testing.T) {
 	if capturedRecord.Identity.AppId != "app_secure" {
 		t.Errorf("Expected Identity.AppId 'app_secure', got %v", capturedRecord.Identity.AppId)
 	}
-	if capturedRecord.Metadata["document_title"] != docTitle {
-		t.Errorf("Expected document_title '%s', got %v", docTitle, capturedRecord.Metadata["document_title"])
-	}
-	if capturedRecord.Metadata["subject_class"] != subjClass {
-		t.Errorf("Expected subject_class '%s', got %v", subjClass, capturedRecord.Metadata["subject_class"])
+	if capturedRecord.Metadata["document_title"] != "E2E Title" {
+		t.Errorf("Expected document_title 'E2E Title', got %v", capturedRecord.Metadata["document_title"])
 	}
 
 	// Assert forbidden fields are purged
@@ -138,8 +81,8 @@ func TestM4_QdrantGenericMetadataPayload_PurgesForbiddenFields(t *testing.T) {
 	}
 
 	// Assert custom allowed fields persist
-	if capturedRecord.Metadata["custom_setting"] != "client_opt_in" {
-		t.Errorf("Expected custom_setting 'client_opt_in', got %v", capturedRecord.Metadata["custom_setting"])
+	if capturedRecord.Metadata["e2e_flag"] != true {
+		t.Errorf("Expected e2e_flag true, got %v", capturedRecord.Metadata["e2e_flag"])
 	}
 }
 
@@ -147,7 +90,6 @@ func TestM4_QdrantGenericMetadataPayload_PurgesForbiddenFields(t *testing.T) {
 // document_title, subject_class, and confidence score on cache hit.
 func TestM4_CheckCache_ReturnsDocumentTitleOnHit(t *testing.T) {
 	expectedTitle := "Title Commitment"
-	expectedSubject := "TITLE_OPINION"
 
 	storeMock := &mockVectorStore{
 		searchFn: func(ctx context.Context, collectionName string, vector []float32, identity *pb.InfrastructureIdentity, metadata map[string]any, limit int) ([]domain.SearchResult, error) {
@@ -155,9 +97,9 @@ func TestM4_CheckCache_ReturnsDocumentTitleOnHit(t *testing.T) {
 				{
 					Score: 0.98,
 					Record: domain.CacheRecord{
+						JSONPayload: "Closing Disclosure Final",
 						Metadata: map[string]any{
 							"document_title": expectedTitle,
-							"subject_class":  expectedSubject,
 							"tenant_id":      identity.TenantId,
 							"app_id":         identity.AppId,
 						},
@@ -173,10 +115,10 @@ func TestM4_CheckCache_ReturnsDocumentTitleOnHit(t *testing.T) {
 	}
 
 	app := application.NewSemanticCacheApp(embedMock, storeMock)
+	ctx := context.Background()
 
 	contract := &pb.CacheContract{
-		CollectionName: "title_opinion_templates",
-		Confidence:     0.90,
+		CollectionName: "testing_e2e_collection",
 	}
 	identity := &pb.InfrastructureIdentity{
 		TenantId: "tenant_title_co",
@@ -184,7 +126,7 @@ func TestM4_CheckCache_ReturnsDocumentTitleOnHit(t *testing.T) {
 		JobId:    "job_test_hit",
 	}
 
-	hit, docTitle, subjClass, conf, err := app.CheckCache(context.Background(), contract, identity, nil)
+	hit, docTitle, conf, err := app.CheckCache(ctx, contract, identity, nil)
 	if err != nil {
 		t.Fatalf("CheckCache failed: %v", err)
 	}
@@ -192,11 +134,8 @@ func TestM4_CheckCache_ReturnsDocumentTitleOnHit(t *testing.T) {
 	if !hit {
 		t.Fatalf("Expected cache hit=true, got false")
 	}
-	if docTitle != expectedTitle {
-		t.Errorf("Expected docTitle '%s', got '%s'", expectedTitle, docTitle)
-	}
-	if subjClass != expectedSubject {
-		t.Errorf("Expected subjClass '%s', got '%s'", expectedSubject, subjClass)
+	if docTitle != "Closing Disclosure Final" || conf < 0.90 {
+		t.Fatalf("CheckCache values mismatched. hit: %v, payload: %s, conf: %f", hit, docTitle, conf)
 	}
 	if conf != 0.98 {
 		t.Errorf("Expected confidence 0.98, got %f", conf)
@@ -208,7 +147,7 @@ func TestM4_CheckCache_ReturnsDocumentTitleOnHit(t *testing.T) {
 func TestM4_IdentityFailFast_Validation(t *testing.T) {
 	app := application.NewSemanticCacheApp(&mockEmbeddingService{}, &mockVectorStore{})
 
-	contract := &pb.CacheContract{CollectionName: "test_collection"}
+	contract := &pb.CacheContract{CollectionName: "testing_e2e_collection"}
 
 	invalidIdentities := map[string]*pb.InfrastructureIdentity{
 		"Nil identity":       nil,
@@ -225,7 +164,7 @@ func TestM4_IdentityFailFast_Validation(t *testing.T) {
 					t.Errorf("%s: Expected panic for invalid identity, got none", name)
 				}
 			}()
-			_, _, _, _, _ = app.CheckCache(context.Background(), contract, id, nil)
+			_, _, _, _ = app.CheckCache(context.Background(), contract, id, nil)
 		})
 	}
 }

@@ -196,7 +196,12 @@ func (h *SemanticCacheHandler) RegisterBlankDocument(ctx context.Context, req *p
 	}
 	// For blank document registration, we can just use a constant or extract string if needed for payload.
 	// We'll store a placeholder payload for blank documents
-	err := h.app.StoreExtraction(ctx, req.CollectionName, req.Identity, nil, "BLANK_DOCUMENT", req.EmbeddingPayload)
+	blankMeta := map[string]any{
+		"subject_class":  "BLANK_DOCUMENT",
+		"document_title": "BLANK_DOCUMENT",
+		"TemplateHash":   "BLANK_HASH",
+	}
+	err := h.app.StoreExtraction(ctx, req.CollectionName, req.Identity, blankMeta, "BLANK_DOCUMENT", req.EmbeddingPayload)
 	if err != nil {
 		logger.Error("SemanticCache", "ERROR: [gRPC] RegisterBlankDocument failed: %v", err)
 		return &pb.RegisterBlankDocumentResponse{Success: false}, fmt.Errorf("application layer StoreExtraction failed: %w", err)

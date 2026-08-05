@@ -168,22 +168,7 @@ func (h *JetStreamHandler) handleMessage(msg jetstream.Msg) {
 
 	if err == nil && meta != nil && meta.NumDelivered > 5 {
 		logger.Info("SemanticCache", "Message exceeded max delivery attempts, terminating (graph_id: %s, initial_node_id: %s)", graphID, initialNodeID)
-		h.sendErrorReply(ctx, msg, "Action failed after multiple retries due to rate limits.", req.Identity)
-		natsutil.LogJetStreamEvent(natsutil.JetStreamLogEvent{
-			Component:  "SemanticCache",
-			Event:      "TERMINATED",
-			Stream:     "WORKERS",
-			Subject:    subject,
-			Consumer:   "semantic_cache_service_consumer",
-			TenantID:   t,
-			AppID:      a,
-			JobID:      j,
-			Attempt:    attempt,
-			DurationMs: time.Since(startTime).Milliseconds(),
-			Error:      fmt.Errorf("exceeded max delivery attempts (5)"),
-		})
-		msg.Term()
-		return
+		panic(fmt.Errorf("action failed for job %s: exceeded max delivery attempts (5)", j))
 	}
 
 	// InProgress keep-alive loop
@@ -317,10 +302,7 @@ func (h *JetStreamHandler) handleMessage(msg jetstream.Msg) {
 	} else if strings.HasPrefix(subject, "worker.cache.background.update") {
 		nodeOutputRaw := payloadMap["node_output"]
 		if nodeOutputRaw == nil {
-			logger.Error("SemanticCache", "StoreExtraction failed: missing node_output in payload")
-			h.sendErrorReply(ctx, msg, "missing node_output for cache update", req.Identity)
-			msg.Term()
-			return
+			panic(fmt.Errorf("action failed for job %s: missing required property node_output in payload", req.Identity.JobId))
 		}
 
 		payloadBytes, err := json.Marshal(nodeOutputRaw)

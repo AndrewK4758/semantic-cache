@@ -159,8 +159,8 @@ func TestChallenger_NilMetadataInMsg(t *testing.T) {
 	}
 
 	payload, _ := structpb.NewStruct(map[string]interface{}{
-		"node_name": "TestNode",
-		"cache_contract": map[string]interface{}{
+		"node_config": map[string]interface{}{"node_name": "TestNode"},
+		"cache": map[string]interface{}{
 			"collection_name": "test_coll",
 		},
 	})
@@ -204,8 +204,8 @@ func TestChallenger_CheckCacheErrorOverwrittenBySendReply(t *testing.T) {
 	}
 
 	payload, _ := structpb.NewStruct(map[string]interface{}{
-		"node_name": "TestNode",
-		"cache_contract": map[string]interface{}{
+		"node_config": map[string]interface{}{"node_name": "TestNode"},
+		"cache": map[string]interface{}{
 			"collection_name": "test_coll",
 		},
 	})
@@ -259,8 +259,8 @@ func TestChallenger_ExtremeConcurrencyStress(t *testing.T) {
 	}
 
 	payload1, _ := structpb.NewStruct(map[string]interface{}{
-		"node_name": "TestNode",
-		"cache_contract": map[string]interface{}{
+		"node_config": map[string]interface{}{"node_name": "TestNode"},
+		"cache": map[string]interface{}{
 			"collection_name": "coll1",
 			"confidence":      0.8,
 		},
@@ -273,11 +273,16 @@ func TestChallenger_ExtremeConcurrencyStress(t *testing.T) {
 	data1, _ := proto.Marshal(req1)
 
 	payload2, _ := structpb.NewStruct(map[string]interface{}{
-		"node_name": "TestNode2",
-		"cache_contract": map[string]interface{}{
+		"node_config": map[string]interface{}{"node_name": "TestNode2"},
+		"cache": map[string]interface{}{
 			"collection_name": "coll2",
 		},
 		"node_output": map[string]interface{}{"data": "value"},
+		"metadata": map[string]interface{}{
+			"subject_class":  "test",
+			"TemplateHash":   "hash",
+			"document_title": "title",
+		},
 	})
 	req2 := &pb.ExecuteTaskRequest{
 		TaskSubject: "worker.cache.background.update",
@@ -345,8 +350,8 @@ func TestChallenger_BackgroundUpdateCorruptNodeOutput(t *testing.T) {
 	h := &JetStreamHandler{app: app}
 
 	payload, _ := structpb.NewStruct(map[string]interface{}{
-		"node_name": "TestNode",
-		"cache_contract": map[string]interface{}{
+		"node_config": map[string]interface{}{"node_name": "TestNode"},
+		"cache": map[string]interface{}{
 			"collection_name": "coll1",
 		},
 	})
@@ -363,13 +368,13 @@ func TestChallenger_BackgroundUpdateCorruptNodeOutput(t *testing.T) {
 		meta:    &jetstream.MsgMetadata{NumDelivered: 1},
 	}
 
-	h.handleMessage(msg)
+	defer func() {
+		if r := recover(); r == nil {
+			t.Errorf("Expected panic for missing node_output")
+		}
+	}()
 
-	msg.mu.Lock()
-	defer msg.mu.Unlock()
-	if !msg.termed {
-		t.Errorf("Expected background update with nil NodeOutput to be Termed")
-	}
+	h.handleMessage(msg)
 }
 
 // Empirical Test: StoreExtraction with Precomputed Vector Any
@@ -390,7 +395,7 @@ func TestChallenger_StoreExtractionWithPrecomputedVector(t *testing.T) {
 
 	err := app.StoreExtraction(context.Background(), "test_coll", &pb.InfrastructureIdentity{
 		TenantId: "t1", AppId: "a1", JobId: "j1",
-	}, map[string]any{"key": "val"}, `{"payload": 1}`, anyVec)
+	}, map[string]any{"key": "val", "subject_class": "test", "document_title": "title", "TemplateHash": "hash"}, `{"payload": 1}`, anyVec)
 
 	if err != nil {
 		t.Fatalf("StoreExtraction failed: %v", err)

@@ -106,11 +106,13 @@ func TestHandleMessage_MaxDeliveryAttemptsExceeded_TerminatesMessage(t *testing.
 		numDeliv: 6, // > 5
 	}
 
-	handler.handleMessage(msg)
+	defer func() {
+		if r := recover(); r == nil {
+			t.Fatalf("Expected panic when NumDelivered > 5, but got none")
+		}
+	}()
 
-	if !msg.termed {
-		t.Fatalf("Expected msg.Term() to be called when NumDelivered > 5, but it was not")
-	}
+	handler.handleMessage(msg)
 }
 
 func TestHandleMessage_MissingNodeConfig_TermsMessage(t *testing.T) {
@@ -119,7 +121,7 @@ func TestHandleMessage_MissingNodeConfig_TermsMessage(t *testing.T) {
 	payload, _ := structpb.NewStruct(map[string]interface{}{
 		"graph_id":        "graph-missing-cfg",
 		"initial_node_id": "node-missing-cfg",
-		"cache_contract": map[string]interface{}{
+		"cache": map[string]interface{}{
 			"collection_name": "test_coll",
 		},
 	})
@@ -140,11 +142,14 @@ func TestHandleMessage_MissingNodeConfig_TermsMessage(t *testing.T) {
 		numDeliv: 1,
 	}
 
-	handler.handleMessage(msg)
+	defer func() {
+		r := recover()
+		if r == nil {
+			t.Fatalf("Expected panic due to missing node_config.node_name, but got none")
+		}
+	}()
 
-	if !msg.termed {
-		t.Fatalf("Expected msg.Term() to be called when NodeConfig is missing, but it was not")
-	}
+	handler.handleMessage(msg)
 }
 
 func TestHandleMessage_UnknownSubject_AcksMessage(t *testing.T) {
@@ -153,8 +158,8 @@ func TestHandleMessage_UnknownSubject_AcksMessage(t *testing.T) {
 	payload, _ := structpb.NewStruct(map[string]interface{}{
 		"graph_id":        "graph-unknown-subj",
 		"initial_node_id": "node-unknown-subj",
-		"node_name":       "Test Node",
-		"cache_contract": map[string]interface{}{
+		"node_config": map[string]interface{}{"node_name": "Test Node"},
+		"cache": map[string]interface{}{
 			"collection_name": "test_coll",
 		},
 	})
@@ -189,7 +194,7 @@ func TestHandleMessage_MissingCacheContract_TermsMessage(t *testing.T) {
 	payload, _ := structpb.NewStruct(map[string]interface{}{
 		"graph_id":        "graph-missing-cache",
 		"initial_node_id": "node-missing-cache",
-		"node_name":       "Test Node",
+		"node_config": map[string]interface{}{"node_name": "Test Node"},
 	})
 	req := &pb.ExecuteTaskRequest{
 		TaskSubject: "worker.cache.lookup",
@@ -209,11 +214,14 @@ func TestHandleMessage_MissingCacheContract_TermsMessage(t *testing.T) {
 		numDeliv: 1,
 	}
 
-	handler.handleMessage(msg)
+	defer func() {
+		r := recover()
+		if r == nil {
+			t.Fatalf("Expected panic due to missing cache config, but got none")
+		}
+	}()
 
-	if !msg.termed {
-		t.Fatalf("Expected msg.Term() to be called when Cache contract is missing, but it was not")
-	}
+	handler.handleMessage(msg)
 }
 
 func TestHandleMessage_GraphIdAndInitialNodeIdExtraction(t *testing.T) {
@@ -225,8 +233,8 @@ func TestHandleMessage_GraphIdAndInitialNodeIdExtraction(t *testing.T) {
 	payload, _ := structpb.NewStruct(map[string]interface{}{
 		"graph_id":        "graph-audit-999",
 		"initial_node_id": "node-start-111",
-		"node_name":       "Cache Audit Node",
-		"cache_contract": map[string]interface{}{
+		"node_config": map[string]interface{}{"node_name": "Cache Audit Node"},
+		"cache": map[string]interface{}{
 			"collection_name": "test_coll",
 		},
 	})
@@ -321,12 +329,17 @@ func TestHandleMessage_BackgroundUpdatePayloadExtraction(t *testing.T) {
 		payload, _ := structpb.NewStruct(map[string]interface{}{
 			"graph_id":        "graph-bg-1",
 			"initial_node_id": "node-bg-1",
-			"node_name":       "test",
-			"cache_contract": map[string]interface{}{
+			"node_config": map[string]interface{}{"node_name": "test"},
+			"cache": map[string]interface{}{
 				"collection_name": "test_coll",
 			},
 			"node_output": map[string]interface{}{
 				"extracted_key": "val1",
+			},
+			"metadata": map[string]interface{}{
+				"subject_class":  "test",
+				"TemplateHash":   "hash",
+				"document_title": "title",
 			},
 		})
 		req := &pb.ExecuteTaskRequest{
@@ -348,8 +361,8 @@ func TestHandleMessage_BackgroundUpdatePayloadExtraction(t *testing.T) {
 		payload, _ := structpb.NewStruct(map[string]interface{}{
 			"graph_id":        "graph-bg-2",
 			"initial_node_id": "node-bg-2",
-			"node_name":       "test",
-			"cache_contract": map[string]interface{}{
+			"node_config": map[string]interface{}{"node_name": "test"},
+			"cache": map[string]interface{}{
 				"collection_name": "test_coll",
 			},
 		})
@@ -361,11 +374,12 @@ func TestHandleMessage_BackgroundUpdatePayloadExtraction(t *testing.T) {
 		data, _ := proto.Marshal(req)
 		msg := &mockCacheMsg{data: data, subject: "worker.cache.background.update", numDeliv: 1}
 
+		defer func() {
+			if r := recover(); r == nil {
+				t.Fatal("expected panic due to missing NodeOutput, but got none")
+			}
+		}()
 		handler.handleMessage(msg)
-
-		if !msg.termed {
-			t.Fatal("expected msg to be termed due to missing NodeOutput")
-		}
 	})
 }
 
@@ -378,13 +392,18 @@ func TestHandleMessage_ConcurrentStressTest(t *testing.T) {
 	payload, _ := structpb.NewStruct(map[string]interface{}{
 		"graph_id":        "graph-stress-99",
 		"initial_node_id": "node-stress-99",
-		"node_name":       "stress_node",
-		"cache_contract": map[string]interface{}{
+		"node_config": map[string]interface{}{"node_name": "stress_node"},
+		"cache": map[string]interface{}{
 			"collection_name": "stress_coll",
 			"confidence":      0.8,
 		},
 		"node_output": map[string]interface{}{
 			"stress": true,
+		},
+		"metadata": map[string]interface{}{
+			"subject_class":  "test",
+			"TemplateHash":   "hash",
+			"document_title": "title",
 		},
 	})
 	req := &pb.ExecuteTaskRequest{

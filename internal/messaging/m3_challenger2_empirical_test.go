@@ -71,11 +71,11 @@ func TestChallenger2_StoreExtraction_BlankDocumentTitle_Panics(t *testing.T) {
 	validId := &pb.InfrastructureIdentity{TenantId: "t1", AppId: "a1", JobId: "j1"}
 
 	assertPanicContains(t, "missing required property document_title", func() {
-		_ = app.StoreExtraction(context.Background(), "coll", validId, map[string]any{}, "", "", nil)
+		_ = app.StoreExtraction(context.Background(), "coll", validId, map[string]any{"document_title": "   ", "subject_class": "test", "TemplateHash": "hash"}, "", nil)
 	})
 
 	assertPanicContains(t, "missing required property document_title", func() {
-		_ = app.StoreExtraction(context.Background(), "coll", validId, map[string]any{}, "   ", "", nil)
+		_ = app.StoreExtraction(context.Background(), "coll", validId, map[string]any{}, "", nil)
 	})
 }
 
@@ -83,11 +83,11 @@ func TestChallenger2_StoreExtraction_NilOrInvalidIdentity_Panics(t *testing.T) {
 	app := application.NewSemanticCacheApp(&dummyEmbedder{}, &dummyStore{})
 
 	assertPanicContains(t, "TenantId", func() {
-		_ = app.StoreExtraction(context.Background(), "coll", nil, map[string]any{}, "DocTitle", "", nil)
+		_ = app.StoreExtraction(context.Background(), "coll", nil, map[string]any{}, "", nil)
 	})
 
 	assertPanicContains(t, "TenantId", func() {
-		_ = app.StoreExtraction(context.Background(), "coll", &pb.InfrastructureIdentity{TenantId: "", AppId: "a1", JobId: "j1"}, map[string]any{}, "DocTitle", "", nil)
+		_ = app.StoreExtraction(context.Background(), "coll", &pb.InfrastructureIdentity{TenantId: "", AppId: "a1", JobId: "j1"}, map[string]any{}, "", nil)
 	})
 }
 
@@ -96,12 +96,12 @@ func TestChallenger2_CheckCache_NilContractOrIdentity_Panics(t *testing.T) {
 	validId := &pb.InfrastructureIdentity{TenantId: "t1", AppId: "a1", JobId: "j1"}
 
 	assertPanicContains(t, "cache contract is required", func() {
-		_, _, _, _, _ = app.CheckCache(context.Background(), nil, validId, nil)
+		_, _, _, _ = app.CheckCache(context.Background(), nil, validId, nil)
 	})
 
 	contract := &pb.CacheContract{CollectionName: "coll"}
 	assertPanicContains(t, "TenantId", func() {
-		_, _, _, _, _ = app.CheckCache(context.Background(), contract, nil, nil)
+		_, _, _, _ = app.CheckCache(context.Background(), contract, nil, nil)
 	})
 }
 

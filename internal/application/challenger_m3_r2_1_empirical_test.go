@@ -60,7 +60,7 @@ func TestChallenger1_Empirical_StoreExtraction_FailFastPanics(t *testing.T) {
 
 	for _, id := range invalidIdentities {
 		assertPanicMessageContains(t, "missing required property", func() {
-			_ = app.StoreExtraction(context.Background(), "test_coll", id, nil, "Valid Title", "CLASS", anyPayload)
+			_ = app.StoreExtraction(context.Background(), "testing_coll", id, map[string]any{"document_title": "Valid Title", "subject_class": "CLASS", "TemplateHash": "hash"}, "Valid Title", anyPayload)
 		})
 	}
 
@@ -68,7 +68,7 @@ func TestChallenger1_Empirical_StoreExtraction_FailFastPanics(t *testing.T) {
 	invalidTitles := []string{"", "   ", "\t\n"}
 	for _, title := range invalidTitles {
 		assertPanicMessageContains(t, "missing required property document_title", func() {
-			_ = app.StoreExtraction(context.Background(), "test_coll", validId, nil, title, "CLASS", anyPayload)
+			_ = app.StoreExtraction(context.Background(), "testing_coll", validId, map[string]any{"document_title": title, "subject_class": "CLASS", "TemplateHash": "hash"}, title, anyPayload)
 		})
 	}
 }
@@ -92,6 +92,7 @@ func TestChallenger1_Empirical_CheckCache_VectorSearch_NilMetadata_Succeeds(t *t
 				{
 					Score: 0.98,
 					Record: domain.CacheRecord{
+						JSONPayload: "Closing Disclosure",
 						Metadata: map[string]any{
 							"document_title": "Closing Disclosure",
 							"subject_class":  "CLOSING",
@@ -115,7 +116,7 @@ func TestChallenger1_Empirical_CheckCache_VectorSearch_NilMetadata_Succeeds(t *t
 		JobId:    "j-challenger",
 	}
 
-	hit, docTitle, subjClass, conf, err := app.CheckCache(context.Background(), contract, identity, nil)
+	hit, docTitle, conf, err := app.CheckCache(context.Background(), contract, identity, nil)
 	if err != nil {
 		t.Fatalf("unexpected error during CheckCache with nil metadata: %v", err)
 	}
@@ -132,8 +133,8 @@ func TestChallenger1_Empirical_CheckCache_VectorSearch_NilMetadata_Succeeds(t *t
 		t.Fatalf("expected hit to be true, got false")
 	}
 
-	if docTitle != "Closing Disclosure" || subjClass != "CLOSING" || conf != 0.98 {
-		t.Fatalf("unexpected CheckCache result: hit=%v, title=%s, class=%s, conf=%f", hit, docTitle, subjClass, conf)
+	if docTitle != "Closing Disclosure" || conf != 0.98 {
+		t.Fatalf("unexpected CheckCache result: hit=%v, title=%s, conf=%f", hit, docTitle, conf)
 	}
 }
 

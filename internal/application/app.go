@@ -60,7 +60,16 @@ func extractVectorFromAny(anyVal *anypb.Any) ([]float32, error) {
 // CheckCache processes the two-stage Check Cache use case using pb.CacheContract.
 func (a *SemanticCacheApp) CheckCache(ctx context.Context, contract *pb.CacheContract, identity *pb.InfrastructureIdentity, fallbackMetadata map[string]any) (hit bool, extractedPayload string, confidence float32, err error) {
 	if contract == nil {
-		return false, "", 0, fmt.Errorf("action failed for job CheckCache: cache contract is required")
+		panic(fmt.Errorf("action failed for job CheckCache: cache contract is required"))
+	}
+	if identity == nil {
+		panic("missing required property: identity cannot be nil")
+	}
+	if strings.TrimSpace(identity.TenantId) == "" {
+		panic("missing required property: TenantId is required")
+	}
+	if strings.TrimSpace(identity.AppId) == "" {
+		panic("missing required property: AppId is required")
 	}
 
 	collectionName := contract.GetCollectionName()
@@ -158,11 +167,23 @@ func (a *SemanticCacheApp) CheckCache(ctx context.Context, contract *pb.CacheCon
 func (a *SemanticCacheApp) StoreExtraction(ctx context.Context, collectionName string, identity *pb.InfrastructureIdentity, metadata map[string]any, extractedPayload string, embeddingPayload *anypb.Any) error {
 	if _, ok := metadata["subject_class"]; !ok {
 		logger.Error("SemanticCache", "FAIL-FAST ASSERTION FAILED [StoreExtraction]: subject_class is missing from metadata")
-		return fmt.Errorf("action failed for job StoreExtraction: missing required metadata key 'subject_class'")
+		panic(fmt.Errorf("action failed for job StoreExtraction: missing required metadata key 'subject_class'"))
 	}
 	if _, ok := metadata["TemplateHash"]; !ok {
 		logger.Error("SemanticCache", "FAIL-FAST ASSERTION FAILED [StoreExtraction]: TemplateHash is missing from metadata")
-		return fmt.Errorf("action failed for job StoreExtraction: missing required metadata key 'TemplateHash'")
+		panic(fmt.Errorf("action failed for job StoreExtraction: missing required metadata key 'TemplateHash'"))
+	}
+	if identity == nil {
+		panic("missing required property: identity cannot be nil")
+	}
+	if strings.TrimSpace(identity.TenantId) == "" {
+		panic("missing required property: TenantId is required")
+	}
+	if strings.TrimSpace(identity.AppId) == "" {
+		panic("missing required property: AppId is required")
+	}
+	if title, ok := metadata["document_title"].(string); !ok || strings.TrimSpace(title) == "" {
+		panic("missing required property document_title in metadata")
 	}
 
 	var text string
@@ -212,6 +233,14 @@ func (a *SemanticCacheApp) StoreExtraction(ctx context.Context, collectionName s
 	hash := sha256.Sum256([]byte(hashStr.String()))
 	recordID := hex.EncodeToString(hash[:])
 	logger.Info("SemanticCache", "DEBUG: [SemanticCacheApp] Generated Record ID: %s", recordID)
+
+	// Purge forbidden client-side keys
+	delete(metadata, "json_payload")
+	delete(metadata, "email_text")
+	delete(metadata, "raw_email")
+	delete(metadata, "inference_input")
+	delete(metadata, "inbound_email_text")
+	delete(metadata, "EmailBody")
 
 	record := domain.CacheRecord{
 		ID:          recordID,

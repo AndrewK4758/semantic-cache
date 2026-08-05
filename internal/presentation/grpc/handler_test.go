@@ -159,10 +159,16 @@ func TestGRPCHandler_ErrorHandling(t *testing.T) {
 	})
 
 	t.Run("StoreExtraction error returns success false and error", func(t *testing.T) {
+		st, _ := structpb.NewStruct(map[string]interface{}{
+			"subject_class":  "test",
+			"TemplateHash":   "hash",
+			"document_title": "title",
+		})
 		_, err := h.StoreExtraction(ctx, &pb.StoreExtractionRequest{
 			CollectionName:   "test",
 			ExtractedPayload: "payload",
 			Identity:         &pb.InfrastructureIdentity{JobId: "j", TenantId: "t", AppId: "a"},
+			Metadata:         st,
 		})
 		if err == nil {
 			t.Fatal("expected error, got nil")
@@ -187,6 +193,7 @@ func TestGRPCHandler_HappyPath(t *testing.T) {
 			CollectionName:   "coll_happy",
 			ExtractedPayload: `{"extracted":true}`,
 			Identity:         identity,
+			Metadata:         &structpb.Struct{Fields: map[string]*structpb.Value{"subject_class": structpb.NewStringValue("CLASS"), "document_title": structpb.NewStringValue("Title"), "TemplateHash": structpb.NewStringValue("hash")}},
 		})
 		if err != nil {
 			t.Fatalf("unexpected error in StoreExtraction: %v", err)
@@ -215,6 +222,7 @@ func TestGRPCHandler_HappyPath(t *testing.T) {
 			CollectionName:   "coll_seed",
 			ExtractedPayload: `{"seeded":true}`,
 			Identity:         identity,
+			Metadata:         &structpb.Struct{Fields: map[string]*structpb.Value{"subject_class": structpb.NewStringValue("CLASS"), "document_title": structpb.NewStringValue("Title"), "TemplateHash": structpb.NewStringValue("hash")}},
 		})
 		if err != nil {
 			t.Fatalf("unexpected error in SeedCache: %v", err)
