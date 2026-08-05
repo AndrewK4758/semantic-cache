@@ -1,5 +1,7 @@
 package messaging
 
+import "github.com/AndrewK4758/shared_utils/payloadkeys"
+
 import (
 	"context"
 	"errors"
@@ -159,8 +161,8 @@ func TestChallenger_NilMetadataInMsg(t *testing.T) {
 	}
 
 	payload, _ := structpb.NewStruct(map[string]interface{}{
-		"node_config": map[string]interface{}{"node_name": "TestNode"},
-		"cache": map[string]interface{}{
+		payloadkeys.NodeConfigKey: map[string]interface{}{"node_name": "TestNode"},
+		payloadkeys.CacheKey: map[string]interface{}{
 			"collection_name": "test_coll",
 		},
 	})
@@ -204,8 +206,8 @@ func TestChallenger_CheckCacheErrorOverwrittenBySendReply(t *testing.T) {
 	}
 
 	payload, _ := structpb.NewStruct(map[string]interface{}{
-		"node_config": map[string]interface{}{"node_name": "TestNode"},
-		"cache": map[string]interface{}{
+		payloadkeys.NodeConfigKey: map[string]interface{}{"node_name": "TestNode"},
+		payloadkeys.CacheKey: map[string]interface{}{
 			"collection_name": "test_coll",
 		},
 	})
@@ -259,8 +261,8 @@ func TestChallenger_ExtremeConcurrencyStress(t *testing.T) {
 	}
 
 	payload1, _ := structpb.NewStruct(map[string]interface{}{
-		"node_config": map[string]interface{}{"node_name": "TestNode"},
-		"cache": map[string]interface{}{
+		payloadkeys.NodeConfigKey: map[string]interface{}{"node_name": "TestNode"},
+		payloadkeys.CacheKey: map[string]interface{}{
 			"collection_name": "coll1",
 			"confidence":      0.8,
 		},
@@ -273,12 +275,12 @@ func TestChallenger_ExtremeConcurrencyStress(t *testing.T) {
 	data1, _ := proto.Marshal(req1)
 
 	payload2, _ := structpb.NewStruct(map[string]interface{}{
-		"node_config": map[string]interface{}{"node_name": "TestNode2"},
-		"cache": map[string]interface{}{
+		payloadkeys.NodeConfigKey: map[string]interface{}{"node_name": "TestNode2"},
+		payloadkeys.CacheKey: map[string]interface{}{
 			"collection_name": "coll2",
 		},
-		"node_output": map[string]interface{}{"data": "value"},
-		"metadata": map[string]interface{}{
+		payloadkeys.NodeOutputKey: map[string]interface{}{"data": "value"},
+		payloadkeys.MetadataKey: map[string]interface{}{
 			"subject_class":  "test",
 			"TemplateHash":   "hash",
 			"document_title": "title",
@@ -350,8 +352,8 @@ func TestChallenger_BackgroundUpdateCorruptNodeOutput(t *testing.T) {
 	h := &JetStreamHandler{app: app}
 
 	payload, _ := structpb.NewStruct(map[string]interface{}{
-		"node_config": map[string]interface{}{"node_name": "TestNode"},
-		"cache": map[string]interface{}{
+		payloadkeys.NodeConfigKey: map[string]interface{}{"node_name": "TestNode"},
+		payloadkeys.CacheKey: map[string]interface{}{
 			"collection_name": "coll1",
 		},
 	})

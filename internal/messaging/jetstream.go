@@ -1,5 +1,7 @@
 package messaging
 
+import "github.com/AndrewK4758/shared_utils/payloadkeys"
+
 import (
 	"context"
 	"encoding/base64"
@@ -147,7 +149,7 @@ func (h *JetStreamHandler) handleMessage(msg jetstream.Msg) {
 	initialNodeID := getString("initial_node_id")
 	
 	nodeName := ""
-	if nc, ok := payloadMap["node_config"].(map[string]interface{}); ok {
+	if nc, ok := payloadMap[payloadkeys.NodeConfigKey].(map[string]interface{}); ok {
 		if nn, ok := nc["node_name"].(string); ok {
 			nodeName = nn
 		}
@@ -205,7 +207,7 @@ func (h *JetStreamHandler) handleMessage(msg jetstream.Msg) {
 	logger.Info("SemanticCache", "Received action request on subject: %s (graph_id: %s, initial_node_id: %s)", subject, graphID, initialNodeID)
 
 	var cacheConfig *pb.CacheContract
-	if cc, ok := payloadMap["cache"].(map[string]interface{}); ok {
+	if cc, ok := payloadMap[payloadkeys.CacheKey].(map[string]interface{}); ok {
 		cacheConfig = &pb.CacheContract{}
 		if colName, ok := cc["collection_name"].(string); ok {
 			cacheConfig.CollectionName = colName
@@ -241,7 +243,7 @@ func (h *JetStreamHandler) handleMessage(msg jetstream.Msg) {
 	}
 
 	metadata := make(map[string]any)
-	if md, ok := payloadMap["metadata"].(map[string]interface{}); ok {
+	if md, ok := payloadMap[payloadkeys.MetadataKey].(map[string]interface{}); ok {
 		for k, v := range md {
 			metadata[k] = v
 		}
@@ -300,7 +302,7 @@ func (h *JetStreamHandler) handleMessage(msg jetstream.Msg) {
 		})
 
 	} else if strings.HasPrefix(subject, "worker.cache.background.update") {
-		nodeOutputRaw := payloadMap["node_output"]
+		nodeOutputRaw := payloadMap[payloadkeys.NodeOutputKey]
 		if nodeOutputRaw == nil {
 			panic(fmt.Errorf("action failed for job %s: missing required property node_output in payload", req.Identity.JobId))
 		}
@@ -425,12 +427,13 @@ func (h *JetStreamHandler) sendSuccessReply(ctx context.Context, msg jetstream.M
 		Success:      true,
 		ActionResult: &resultStruct,
 	}
+	_, _, jobId := natsutil.ExtractIdentity(reqIdentity)
 	outBytes, err := protojson.Marshal(&resultStruct)
 	if err == nil {
-		logger.Info("SemanticCache", "DISPATCHING ActionResult Output: %s", string(outBytes))
+		logger.Info("SemanticCache", "DISPATCHING ActionResult Output for JobId %s:\n%s", jobId, string(outBytes))
 	} else {
 		outJson, _ := json.Marshal(resultStruct.AsMap())
-		logger.Info("SemanticCache", "DISPATCHING ActionResult Output: %s", string(outJson))
+		logger.Info("SemanticCache", "DISPATCHING ActionResult Output for JobId %s:\n%s", jobId, string(outJson))
 	}
 	return h.publishReply(ctx, replySubj, resp, reqIdentity)
 }

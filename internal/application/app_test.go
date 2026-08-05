@@ -96,7 +96,7 @@ func TestSemanticCacheApp_CheckCache(t *testing.T) {
 			},
 			args: args{
 				text:      "some text",
-				metadata:  map[string]any{"filename": "test.pdf", "TemplateHash": "hash"},
+				metadata:  map[string]any{"filename": "test.pdf", "subject_class": "test_subject"},
 				threshold: 0.90,
 			},
 			expectedHit:        true,
@@ -112,7 +112,7 @@ func TestSemanticCacheApp_CheckCache(t *testing.T) {
 			searchFn: func(ctx context.Context, collectionName string, vector []float32, identity *pb.InfrastructureIdentity, metadata map[string]any, limit int) ([]domain.SearchResult, error) {
 				return []domain.SearchResult{
 					{
-						Score: 0.95,
+						Score: 0.98,
 						Record: domain.CacheRecord{
 							JSONPayload: `{"status":"fallback_hit"}`,
 						},
@@ -126,7 +126,7 @@ func TestSemanticCacheApp_CheckCache(t *testing.T) {
 			},
 			expectedHit:        true,
 			expectedPayload:    `{"status":"fallback_hit"}`,
-			expectedConfidence: 0.95,
+			expectedConfidence: 0.98,
 			expectError:        false,
 		},
 		{
@@ -134,7 +134,7 @@ func TestSemanticCacheApp_CheckCache(t *testing.T) {
 			searchFn: func(ctx context.Context, collectionName string, vector []float32, identity *pb.InfrastructureIdentity, metadata map[string]any, limit int) ([]domain.SearchResult, error) {
 				return []domain.SearchResult{
 					{
-						Score: 0.95,
+						Score: 0.98,
 						Record: domain.CacheRecord{
 							JSONPayload: `{"status":"ok"}`,
 						},
@@ -148,7 +148,7 @@ func TestSemanticCacheApp_CheckCache(t *testing.T) {
 			},
 			expectedHit:        true,
 			expectedPayload:    `{"status":"ok"}`,
-			expectedConfidence: 0.95,
+			expectedConfidence: 0.98,
 			expectError:        false,
 		},
 		{
@@ -288,7 +288,7 @@ func TestCheckCache_EmptyMetadataWithNonNilIdentity_SkipsStage1(t *testing.T) {
 			searchCalled = true
 			return []domain.SearchResult{
 				{
-					Score: 0.95,
+					Score: 0.98,
 					Record: domain.CacheRecord{
 						JSONPayload: `{"doc": "correct_semantic_doc"}`,
 					},
@@ -324,8 +324,8 @@ func TestCheckCache_EmptyMetadataWithNonNilIdentity_SkipsStage1(t *testing.T) {
 		t.Errorf("expected payload %s, got %s", expectedPayload, payload)
 	}
 
-	if conf != 0.95 {
-		t.Errorf("expected confidence 0.95, got %f", conf)
+	if conf != 0.98 {
+		t.Errorf("expected confidence 0.98, got %f", conf)
 	}
 
 	if !embedCalled {

@@ -35,7 +35,7 @@ func (m *mockStore) Search(ctx context.Context, collectionName string, vector []
 	}
 	for _, r := range m.records {
 		return []domain.SearchResult{
-			{Record: r, Score: 0.95},
+			{Record: r, Score: 0.98},
 		}, nil
 	}
 	return nil, nil

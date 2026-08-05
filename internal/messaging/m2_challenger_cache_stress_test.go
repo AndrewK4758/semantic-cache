@@ -1,5 +1,7 @@
 package messaging
 
+import "github.com/AndrewK4758/shared_utils/payloadkeys"
+
 import (
 	"testing"
 
@@ -20,7 +22,7 @@ func createTestStruct(m map[string]interface{}) *structpb.Struct {
 func TestM2Challenger_SemanticCache_NodeNameStrict(t *testing.T) {
 	// Scenario 1: Valid node_name in node_config
 	validPayload := createTestStruct(map[string]interface{}{
-		"node_config": map[string]interface{}{
+		payloadkeys.NodeConfigKey: map[string]interface{}{
 			"node_name": "SemanticCacheWorker",
 		},
 	})
@@ -33,7 +35,7 @@ func TestM2Challenger_SemanticCache_NodeNameStrict(t *testing.T) {
 
 	// Scenario 2: Legacy PascalCase NodeName at node_config -> Must fail fast
 	legacyPayload := createTestStruct(map[string]interface{}{
-		"node_config": map[string]interface{}{
+		payloadkeys.NodeConfigKey: map[string]interface{}{
 			"NodeName": "SemanticCacheWorker",
 		},
 	})

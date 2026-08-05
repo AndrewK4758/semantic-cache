@@ -1,5 +1,7 @@
 package messaging
 
+import "github.com/AndrewK4758/shared_utils/payloadkeys"
+
 import (
 	"context"
 	"sync"
@@ -121,7 +123,7 @@ func TestHandleMessage_MissingNodeConfig_TermsMessage(t *testing.T) {
 	payload, _ := structpb.NewStruct(map[string]interface{}{
 		"graph_id":        "graph-missing-cfg",
 		"initial_node_id": "node-missing-cfg",
-		"cache": map[string]interface{}{
+		payloadkeys.CacheKey: map[string]interface{}{
 			"collection_name": "test_coll",
 		},
 	})
@@ -158,8 +160,8 @@ func TestHandleMessage_UnknownSubject_AcksMessage(t *testing.T) {
 	payload, _ := structpb.NewStruct(map[string]interface{}{
 		"graph_id":        "graph-unknown-subj",
 		"initial_node_id": "node-unknown-subj",
-		"node_config": map[string]interface{}{"node_name": "Test Node"},
-		"cache": map[string]interface{}{
+		payloadkeys.NodeConfigKey: map[string]interface{}{"node_name": "Test Node"},
+		payloadkeys.CacheKey: map[string]interface{}{
 			"collection_name": "test_coll",
 		},
 	})
@@ -194,7 +196,7 @@ func TestHandleMessage_MissingCacheContract_TermsMessage(t *testing.T) {
 	payload, _ := structpb.NewStruct(map[string]interface{}{
 		"graph_id":        "graph-missing-cache",
 		"initial_node_id": "node-missing-cache",
-		"node_config": map[string]interface{}{"node_name": "Test Node"},
+		payloadkeys.NodeConfigKey: map[string]interface{}{"node_name": "Test Node"},
 	})
 	req := &pb.ExecuteTaskRequest{
 		TaskSubject: "worker.cache.lookup",
@@ -233,8 +235,8 @@ func TestHandleMessage_GraphIdAndInitialNodeIdExtraction(t *testing.T) {
 	payload, _ := structpb.NewStruct(map[string]interface{}{
 		"graph_id":        "graph-audit-999",
 		"initial_node_id": "node-start-111",
-		"node_config": map[string]interface{}{"node_name": "Cache Audit Node"},
-		"cache": map[string]interface{}{
+		payloadkeys.NodeConfigKey: map[string]interface{}{"node_name": "Cache Audit Node"},
+		payloadkeys.CacheKey: map[string]interface{}{
 			"collection_name": "test_coll",
 		},
 	})
@@ -329,14 +331,14 @@ func TestHandleMessage_BackgroundUpdatePayloadExtraction(t *testing.T) {
 		payload, _ := structpb.NewStruct(map[string]interface{}{
 			"graph_id":        "graph-bg-1",
 			"initial_node_id": "node-bg-1",
-			"node_config": map[string]interface{}{"node_name": "test"},
-			"cache": map[string]interface{}{
+			payloadkeys.NodeConfigKey: map[string]interface{}{"node_name": "test"},
+			payloadkeys.CacheKey: map[string]interface{}{
 				"collection_name": "test_coll",
 			},
-			"node_output": map[string]interface{}{
+			payloadkeys.NodeOutputKey: map[string]interface{}{
 				"extracted_key": "val1",
 			},
-			"metadata": map[string]interface{}{
+			payloadkeys.MetadataKey: map[string]interface{}{
 				"subject_class":  "test",
 				"TemplateHash":   "hash",
 				"document_title": "title",
@@ -361,8 +363,8 @@ func TestHandleMessage_BackgroundUpdatePayloadExtraction(t *testing.T) {
 		payload, _ := structpb.NewStruct(map[string]interface{}{
 			"graph_id":        "graph-bg-2",
 			"initial_node_id": "node-bg-2",
-			"node_config": map[string]interface{}{"node_name": "test"},
-			"cache": map[string]interface{}{
+			payloadkeys.NodeConfigKey: map[string]interface{}{"node_name": "test"},
+			payloadkeys.CacheKey: map[string]interface{}{
 				"collection_name": "test_coll",
 			},
 		})
@@ -392,15 +394,15 @@ func TestHandleMessage_ConcurrentStressTest(t *testing.T) {
 	payload, _ := structpb.NewStruct(map[string]interface{}{
 		"graph_id":        "graph-stress-99",
 		"initial_node_id": "node-stress-99",
-		"node_config": map[string]interface{}{"node_name": "stress_node"},
-		"cache": map[string]interface{}{
+		payloadkeys.NodeConfigKey: map[string]interface{}{"node_name": "stress_node"},
+		payloadkeys.CacheKey: map[string]interface{}{
 			"collection_name": "stress_coll",
 			"confidence":      0.8,
 		},
-		"node_output": map[string]interface{}{
+		payloadkeys.NodeOutputKey: map[string]interface{}{
 			"stress": true,
 		},
-		"metadata": map[string]interface{}{
+		payloadkeys.MetadataKey: map[string]interface{}{
 			"subject_class":  "test",
 			"TemplateHash":   "hash",
 			"document_title": "title",

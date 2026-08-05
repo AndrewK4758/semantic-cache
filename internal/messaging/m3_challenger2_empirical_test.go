@@ -1,5 +1,7 @@
 package messaging
 
+import "github.com/AndrewK4758/shared_utils/payloadkeys"
+
 import (
 	"context"
 	"testing"
@@ -156,7 +158,7 @@ func TestChallenger2_JetStream_MissingCacheContract_Panics(t *testing.T) {
 	h := &JetStreamHandler{app: app}
 
 	payloadStruct, _ := structpb.NewStruct(map[string]interface{}{
-		"node_config": map[string]interface{}{
+		payloadkeys.NodeConfigKey: map[string]interface{}{
 			"node_name": "SemanticCacheWorker",
 		},
 	})
@@ -185,10 +187,10 @@ func TestChallenger2_JetStream_BackgroundUpdate_MissingNodeOutput_Panics(t *test
 	_ = anyPayload
 
 	payloadStruct, _ := structpb.NewStruct(map[string]interface{}{
-		"node_config": map[string]interface{}{
+		payloadkeys.NodeConfigKey: map[string]interface{}{
 			"node_name": "SemanticCacheWorker",
 		},
-		"cache": cacheStruct,
+		payloadkeys.CacheKey: cacheStruct,
 	})
 
 	req := &pb.ExecuteTaskRequest{
@@ -200,16 +202,16 @@ func TestChallenger2_JetStream_BackgroundUpdate_MissingNodeOutput_Panics(t *test
 	// Inject non-empty EmbeddingLookup into cache struct via raw payload Map or proto
 	// Create cache struct with embedding lookup or inference_input_key
 	payloadStruct, _ = structpb.NewStruct(map[string]interface{}{
-		"node_config": map[string]interface{}{
+		payloadkeys.NodeConfigKey: map[string]interface{}{
 			"node_name":           "SemanticCacheWorker",
 			"inference_input_key": "inbound_text",
 		},
-		"global_state": map[string]interface{}{
+		payloadkeys.GlobalStateKey: map[string]interface{}{
 			"functional": map[string]interface{}{
 				"inbound_text": "Sample text for cache embedding",
 			},
 		},
-		"cache": map[string]interface{}{
+		payloadkeys.CacheKey: map[string]interface{}{
 			"collection_name": "test_coll",
 		},
 	})
@@ -228,19 +230,19 @@ func TestChallenger2_JetStream_BackgroundUpdate_MissingDocumentTitle_Panics(t *t
 	h := &JetStreamHandler{app: app}
 
 	payloadStruct, _ := structpb.NewStruct(map[string]interface{}{
-		"node_config": map[string]interface{}{
+		payloadkeys.NodeConfigKey: map[string]interface{}{
 			"node_name":           "SemanticCacheWorker",
 			"inference_input_key": "inbound_text",
 		},
-		"global_state": map[string]interface{}{
+		payloadkeys.GlobalStateKey: map[string]interface{}{
 			"functional": map[string]interface{}{
 				"inbound_text": "Sample text for cache embedding",
 			},
 		},
-		"cache": map[string]interface{}{
+		payloadkeys.CacheKey: map[string]interface{}{
 			"collection_name": "test_coll",
 		},
-		"node_output": map[string]interface{}{
+		payloadkeys.NodeOutputKey: map[string]interface{}{
 			"other_field": "some_value",
 		},
 	})
@@ -263,7 +265,7 @@ func TestChallenger2_JetStream_ExceededMaxDeliveryAttempts_Panics(t *testing.T) 
 	h := &JetStreamHandler{app: app}
 
 	payloadStruct, _ := structpb.NewStruct(map[string]interface{}{
-		"node_config": map[string]interface{}{
+		payloadkeys.NodeConfigKey: map[string]interface{}{
 			"node_name": "SemanticCacheWorker",
 		},
 	})

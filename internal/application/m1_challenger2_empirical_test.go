@@ -174,7 +174,7 @@ func TestChallenger2_EmpiricalCheckCacheReturnMetadata(t *testing.T) {
 		embedMock := &mockEmbeddingService{}
 		app := application.NewSemanticCacheApp(embedMock, storeMock)
 
-		metaStruct, _ := structpb.NewStruct(map[string]any{"filename": "closing.pdf", "TemplateHash": "hash"})
+		metaStruct, _ := structpb.NewStruct(map[string]any{"filename": "closing.pdf", "subject_class": "test_subject"})
 		contract := &pb.CacheContract{
 			CollectionName: "coll_check",
 			Confidence:     0.85,
@@ -202,7 +202,7 @@ func TestChallenger2_EmpiricalCheckCacheReturnMetadata(t *testing.T) {
 			searchFn: func(ctx context.Context, collectionName string, vector []float32, id *pb.InfrastructureIdentity, metadata map[string]any, limit int) ([]domain.SearchResult, error) {
 				return []domain.SearchResult{
 					{
-						Score: 0.92,
+						Score: 0.98,
 						Record: domain.CacheRecord{
 							ID:       "uuid-5678",
 							Identity: id,
@@ -245,8 +245,8 @@ func TestChallenger2_EmpiricalCheckCacheReturnMetadata(t *testing.T) {
 		if payload != "extracted_payload_456" {
 			t.Errorf("Expected payload 'extracted_payload_456', got '%v'", payload)
 		}
-		if conf != 0.92 {
-			t.Errorf("Expected confidence=0.92, got %f", conf)
+		if conf != 0.98 {
+			t.Errorf("Expected confidence=0.98, got %f", conf)
 		}
 	})
 }
