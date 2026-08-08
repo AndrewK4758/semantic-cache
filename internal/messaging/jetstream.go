@@ -244,8 +244,15 @@ func (h *JetStreamHandler) handleMessage(msg jetstream.Msg) {
 
 	metadata := make(map[string]any)
 	if md, ok := payloadMap[payloadkeys.MetadataKey].(map[string]interface{}); ok {
-		for k, v := range md {
-			metadata[k] = v
+		// Unwrap "values" if it's the strongly-typed MetadataPayload
+		if valuesWrapper, hasValues := md["values"].(map[string]interface{}); hasValues {
+			for k, v := range valuesWrapper {
+				metadata[k] = v
+			}
+		} else {
+			for k, v := range md {
+				metadata[k] = v
+			}
 		}
 	}
 
@@ -274,10 +281,15 @@ func (h *JetStreamHandler) handleMessage(msg jetstream.Msg) {
 			return
 		}
 
+		var matchedPayloadObj interface{}
+		if payload != "" {
+			matchedPayloadObj = json.RawMessage(payload)
+		}
+
 		resultMap := map[string]interface{}{
 			"semanticCacheResult": hitStr(hit),
 			"confidence":          confidence,
-			"matchedPayload":      payload,
+			"matchedPayload":      matchedPayloadObj,
 		}
 		resultBytes, _ := json.Marshal(resultMap)
 

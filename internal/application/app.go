@@ -53,19 +53,35 @@ func extractVectorFromAny(anyVal *anypb.Any) ([]float32, error) {
 			return vec, nil
 		}
 	}
+	
+	var val structpb.Value
+	if err := anyVal.UnmarshalTo(&val); err == nil {
+		if val.GetListValue() != nil {
+			list := val.GetListValue()
+			vec := make([]float32, 0, len(list.Values))
+			for _, v := range list.Values {
+				vec = append(vec, float32(v.GetNumberValue()))
+			}
+			return vec, nil
+		} else if val.GetStringValue() != "" {
+			var vec []float32
+			if errJson := json.Unmarshal([]byte(val.GetStringValue()), &vec); errJson == nil {
+				return vec, nil
+			}
+		}
+	}
 
 	var list structpb.ListValue
-	if err := anyVal.UnmarshalTo(&list); err != nil {
-		return nil, fmt.Errorf("failed to unmarshal vector: %w", err)
-	}
-
-	if len(list.Values) > 0 {
-		vec := make([]float32, 0, len(list.Values))
-		for _, v := range list.Values {
-			vec = append(vec, float32(v.GetNumberValue()))
+	if err := anyVal.UnmarshalTo(&list); err == nil {
+		if len(list.Values) > 0 {
+			vec := make([]float32, 0, len(list.Values))
+			for _, v := range list.Values {
+				vec = append(vec, float32(v.GetNumberValue()))
+			}
+			return vec, nil
 		}
-		return vec, nil
 	}
+	
 	return nil, nil
 }
 
@@ -139,7 +155,11 @@ func (a *SemanticCacheApp) CheckCache(ctx context.Context, contract *pb.CacheCon
 	var vector []float32
 	var embedErr error
 	if contract.EmbeddingLookup != nil {
-		vector, _ = extractVectorFromAny(contract.EmbeddingLookup)
+		vector, err = extractVectorFromAny(contract.EmbeddingLookup)
+		if err != nil {
+			logger.Error("SemanticCache", "Failed to extract vector: %v", err)
+			return false, "", 0, fmt.Errorf("failed to extract vector: %w", err)
+		}
 	}
 
 	if len(vector) == 0 {
@@ -219,7 +239,11 @@ func (a *SemanticCacheApp) StoreExtraction(ctx context.Context, collectionName s
 	var vector []float32
 	var embErr error
 	if embeddingPayload != nil {
-		vector, _ = extractVectorFromAny(embeddingPayload)
+		vector, embErr = extractVectorFromAny(embeddingPayload)
+		if embErr != nil {
+			logger.Error("SemanticCache", "Failed to extract vector from payload: %v", embErr)
+			return fmt.Errorf("failed to extract vector from payload: %w", embErr)
+		}
 	}
 
 	if len(vector) == 0 {
