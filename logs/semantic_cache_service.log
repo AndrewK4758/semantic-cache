@@ -1,7 +1,0 @@
-{"time":"2026-07-31T19:57:51.398973156-04:00","level":"INFO","msg":"Successfully connected to NATS at nats://localhost:4222","service_name":"semantic_cache_service","component":"SemanticCache"}
-{"time":"2026-07-31T19:57:51.401027017-04:00","level":"INFO","msg":"Listening for Cache Requests on NATS JetStream (WORKERS stream)...","service_name":"semantic_cache_service","component":"SemanticCache"}
-{"time":"2026-07-31T19:59:33.664771111-04:00","level":"INFO","msg":"Successfully connected to NATS at nats://localhost:4222","service_name":"semantic_cache_service","component":"SemanticCache"}
-{"time":"2026-07-31T19:59:33.665700896-04:00","level":"INFO","msg":"Listening for Cache Requests on NATS JetStream (WORKERS stream)...","service_name":"semantic_cache_service","component":"SemanticCache"}
-{"time":"2026-07-31T20:02:10.485629875-04:00","level":"INFO","msg":"Successfully connected to NATS at nats://localhost:4222","service_name":"semantic_cache_service","component":"SemanticCache"}
-{"time":"2026-07-31T20:02:10.486280278-04:00","level":"INFO","msg":"Listening for Cache Requests on NATS JetStream (WORKERS stream)...","service_name":"semantic_cache_service","component":"SemanticCache"}
-{"time":"2026-07-31T20:02:10.486446558-04:00","level":"INFO","msg":"Semantic Cache Service listening on port 11115","service_name":"semantic_cache_service","component":"SemanticCache"}

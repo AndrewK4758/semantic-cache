@@ -28,11 +28,11 @@ func main() {
 	logger.InitLogger()
 
 	// Configuration
-	grpcPort := getEnv("GRPC_PORT", "11115")
-	qdrantAddr := getEnv("QDRANT_URL", "localhost:6334")
-	openaiURL := getEnv("EMBEDDING_BASE_URL", getEnv("OPENAI_BASE_URL", "http://localhost:11434/v1"))
+	grpcPort := envutil.MustGetString("GRPC_PORT")
+	qdrantAddr := envutil.MustGetString("QDRANT_URL")
+	openaiURL := envutil.MustGetString("OPENAI_BASE_URL")
 	openaiModel := envutil.MustGetEmbeddingModel()
-	collectionName := getEnv("QDRANT_COLLECTION", "default_cache")
+	collectionName := envutil.MustGetString("QDRANT_COLLECTION")
 
 	// Infrastructure
 	openaiClient := openai.NewClient(openaiURL, openaiModel)
@@ -40,7 +40,7 @@ func main() {
 	qdrantClient, err := qdrant.NewClient(qdrantAddr, collectionName)
 	if err != nil {
 		logger.Error("SemanticCache", "Failed to initialize Qdrant client: %v", err)
-		panic(fmt.Errorf("Failed to initialize Qdrant client: %w", err))
+		panic(fmt.Errorf("failed to initialize Qdrant client: %w", err))
 	}
 	defer qdrantClient.Close()
 
@@ -51,24 +51,24 @@ func main() {
 	handler := grpchandler.NewSemanticCacheHandler(app)
 
 	// Messaging (JetStream)
-	natsURL := getEnv("NATS_URL", "nats://localhost:4222")
+	natsURL := envutil.MustGetString("NATS_URL")
 	jsHandler, err := messaging.NewJetStreamHandler(natsURL, app)
 	if err != nil {
 		logger.Error("SemanticCache", "Failed to initialize JetStream handler: %v", err)
-		panic(fmt.Errorf("Failed to initialize JetStream handler: %w", err))
+		panic(fmt.Errorf("failed to initialize JetStream handler: %w", err))
 	}
 	defer jsHandler.Close()
 
 	if err := jsHandler.StartConsumers(context.Background()); err != nil {
 		logger.Error("SemanticCache", "Failed to start JetStream consumers: %v", err)
-		panic(fmt.Errorf("Failed to start JetStream consumers: %w", err))
+		panic(fmt.Errorf("failed to start JetStream consumers: %w", err))
 	}
 
 	// gRPC Server Setup
 	lis, err := net.Listen("tcp", ":"+grpcPort)
 	if err != nil {
 		logger.Error("SemanticCache", "Failed to listen on port %s: %v", grpcPort, err)
-		panic(fmt.Errorf("Failed to listen on port %s: %w", grpcPort, err))
+		panic(fmt.Errorf("failed to listen on port %s: %w", grpcPort, err))
 	}
 
 	grpcServer := grpc.NewServer()
@@ -80,7 +80,7 @@ func main() {
 		logger.Info("SemanticCache", "Semantic Cache Service listening on port %s", grpcPort)
 		if err := grpcServer.Serve(lis); err != nil {
 			logger.Error("SemanticCache", "Failed to serve gRPC server: %v", err)
-			panic(fmt.Errorf("Failed to serve gRPC server: %w", err))
+			panic(fmt.Errorf("failed to serve gRPC server: %w", err))
 		}
 	}()
 
@@ -91,11 +91,4 @@ func main() {
 	logger.Info("SemanticCache", "%v", "Shutting down Semantic Cache Service gracefully...")
 	grpcServer.GracefulStop()
 	logger.Info("SemanticCache", "%v", "Shutdown complete.")
-}
-
-func getEnv(key, fallback string) string {
-	if value, exists := os.LookupEnv(key); exists {
-		return value
-	}
-	return fallback
 }
