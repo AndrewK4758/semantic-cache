@@ -117,9 +117,10 @@ func TestChallenger2_JetStream_MissingIdentity_Panics(t *testing.T) {
 	data, _ := protoMarshalReq(req)
 	msg := &mockCacheMsg{data: data, subject: "worker.cache.lookup"}
 
-	assertPanicContains(t, "TenantId", func() {
-		h.handleMessage(msg)
-	})
+	h.handleMessage(msg)
+	if !msg.nacked {
+		t.Fatalf("expected msg to be nacked for missing Identity")
+	}
 }
 
 func TestChallenger2_JetStream_MissingTaskSubject_Panics(t *testing.T) {
@@ -132,9 +133,10 @@ func TestChallenger2_JetStream_MissingTaskSubject_Panics(t *testing.T) {
 	data, _ := protoMarshalReq(req)
 	msg := &mockCacheMsg{data: data, subject: "worker.cache.lookup"}
 
-	assertPanicContains(t, "TaskSubject", func() {
-		h.handleMessage(msg)
-	})
+	h.handleMessage(msg)
+	if !msg.nacked {
+		t.Fatalf("expected msg to be nacked for missing TaskSubject")
+	}
 }
 
 func TestChallenger2_JetStream_MissingNodeConfig_Panics(t *testing.T) {
@@ -148,9 +150,10 @@ func TestChallenger2_JetStream_MissingNodeConfig_Panics(t *testing.T) {
 	data, _ := protoMarshalReq(req)
 	msg := &mockCacheMsg{data: data, subject: "worker.cache.lookup"}
 
-	assertPanicContains(t, "node_config", func() {
-		h.handleMessage(msg)
-	})
+	h.handleMessage(msg)
+	if !msg.nacked {
+		t.Fatalf("expected msg to be nacked for missing node_config")
+	}
 }
 
 func TestChallenger2_JetStream_MissingCacheContract_Panics(t *testing.T) {
@@ -171,9 +174,10 @@ func TestChallenger2_JetStream_MissingCacheContract_Panics(t *testing.T) {
 	data, _ := protoMarshalReq(req)
 	msg := &mockCacheMsg{data: data, subject: "worker.cache.lookup"}
 
-	assertPanicContains(t, "cache contract", func() {
-		h.handleMessage(msg)
-	})
+	h.handleMessage(msg)
+	if !msg.nacked {
+		t.Fatalf("expected msg to be nacked for missing cache contract")
+	}
 }
 
 func TestChallenger2_JetStream_BackgroundUpdate_MissingNodeOutput_Panics(t *testing.T) {
@@ -220,9 +224,10 @@ func TestChallenger2_JetStream_BackgroundUpdate_MissingNodeOutput_Panics(t *test
 	data, _ := protoMarshalReq(req)
 	msg := &mockCacheMsg{data: data, subject: "worker.cache.background.update"}
 
-	assertPanicContains(t, "missing required property node_output in payload", func() {
-		h.handleMessage(msg)
-	})
+	h.handleMessage(msg)
+	if !msg.nacked {
+		t.Fatalf("expected msg to be nacked for missing node_output")
+	}
 }
 
 func TestChallenger2_JetStream_BackgroundUpdate_MissingDocumentTitle_Panics(t *testing.T) {
@@ -255,9 +260,10 @@ func TestChallenger2_JetStream_BackgroundUpdate_MissingDocumentTitle_Panics(t *t
 	data, _ := protoMarshalReq(req)
 	msg := &mockCacheMsg{data: data, subject: "worker.cache.background.update"}
 
-	assertPanicContains(t, "missing required property document_title", func() {
-		h.handleMessage(msg)
-	})
+	h.handleMessage(msg)
+	if !msg.nacked {
+		t.Fatalf("expected msg to be nacked for missing document_title")
+	}
 }
 
 func TestChallenger2_JetStream_ExceededMaxDeliveryAttempts_Panics(t *testing.T) {
@@ -278,9 +284,10 @@ func TestChallenger2_JetStream_ExceededMaxDeliveryAttempts_Panics(t *testing.T) 
 	data, _ := protoMarshalReq(req)
 	msg := &mockCacheMsg{data: data, subject: "worker.cache.lookup", numDeliv: 6}
 
-	assertPanicContains(t, "exceeded max delivery attempts", func() {
-		h.handleMessage(msg)
-	})
+	h.handleMessage(msg)
+	if !msg.nacked {
+		t.Fatalf("expected msg to be nacked for exceeding max delivery attempts")
+	}
 }
 
 func TestChallenger2_Qdrant_EmptyCollection_Panics(t *testing.T) {

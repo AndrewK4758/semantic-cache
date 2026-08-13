@@ -108,13 +108,11 @@ func TestHandleMessage_MaxDeliveryAttemptsExceeded_TerminatesMessage(t *testing.
 		numDeliv: 6, // > 5
 	}
 
-	defer func() {
-		if r := recover(); r == nil {
-			t.Fatalf("Expected panic when NumDelivered > 5, but got none")
-		}
-	}()
-
 	handler.handleMessage(msg)
+
+	if !msg.nacked {
+		t.Fatalf("Expected msg to be nacked when NumDelivered > 5, but got none")
+	}
 }
 
 func TestHandleMessage_MissingNodeConfig_TermsMessage(t *testing.T) {
@@ -144,14 +142,11 @@ func TestHandleMessage_MissingNodeConfig_TermsMessage(t *testing.T) {
 		numDeliv: 1,
 	}
 
-	defer func() {
-		r := recover()
-		if r == nil {
-			t.Fatalf("Expected panic due to missing node_config.node_name, but got none")
-		}
-	}()
-
 	handler.handleMessage(msg)
+
+	if !msg.nacked {
+		t.Fatalf("Expected msg to be nacked due to missing node_config.node_name, but got none")
+	}
 }
 
 func TestHandleMessage_UnknownSubject_AcksMessage(t *testing.T) {
@@ -216,14 +211,11 @@ func TestHandleMessage_MissingCacheContract_TermsMessage(t *testing.T) {
 		numDeliv: 1,
 	}
 
-	defer func() {
-		r := recover()
-		if r == nil {
-			t.Fatalf("Expected panic due to missing cache config, but got none")
-		}
-	}()
-
 	handler.handleMessage(msg)
+
+	if !msg.nacked {
+		t.Fatalf("Expected msg to be nacked due to missing cache config, but got none")
+	}
 }
 
 func TestHandleMessage_GraphIdAndInitialNodeIdExtraction(t *testing.T) {
@@ -376,12 +368,10 @@ func TestHandleMessage_BackgroundUpdatePayloadExtraction(t *testing.T) {
 		data, _ := proto.Marshal(req)
 		msg := &mockCacheMsg{data: data, subject: "worker.cache.background.update", numDeliv: 1}
 
-		defer func() {
-			if r := recover(); r == nil {
-				t.Fatal("expected panic due to missing NodeOutput, but got none")
-			}
-		}()
 		handler.handleMessage(msg)
+		if !msg.nacked {
+			t.Fatal("expected msg to be nacked due to missing NodeOutput, but got none")
+		}
 	})
 }
 

@@ -74,6 +74,13 @@ func (h *JetStreamHandler) StartConsumers(ctx context.Context) error {
 			AckWait:        60 * time.Second,
 			FilterSubjects: []string{"worker.cache.lookup", "worker.cache.lookup.>", "worker.cache.background.update", "worker.cache.background.update.>"},
 			MaxAckPending:  maxAckPending,
+			BackOff: []time.Duration{
+				1 * time.Second,
+				5 * time.Second,
+				15 * time.Second,
+				30 * time.Second,
+				60 * time.Second,
+			},
 		})
 		if err == nil {
 			break
@@ -86,8 +93,13 @@ func (h *JetStreamHandler) StartConsumers(ctx context.Context) error {
 	}
 
 	logger.Info("SemanticCache", "%v", "Listening for Cache Requests on NATS JetStream (WORKERS stream)...")
+	sem := make(chan struct{}, maxAckPending)
 	_, err = cons.Consume(func(msg jetstream.Msg) {
-		go h.handleMessage(msg)
+		sem <- struct{}{}
+		go func() {
+			defer func() { <-sem }()
+			h.handleMessage(msg)
+		}()
 	}, jetstream.PullMaxMessages(pullMaxMessages))
 	if err != nil {
 		return fmt.Errorf("failed to consume cache requests: %w", err)
@@ -98,6 +110,14 @@ func (h *JetStreamHandler) StartConsumers(ctx context.Context) error {
 
 func (h *JetStreamHandler) handleMessage(msg jetstream.Msg) {
 	startTime := time.Now()
+	var tenantID, appID, jobID string
+	defer func() {
+		if r := recover(); r != nil {
+			logger.Error("SemanticCache", "PANIC RECOVERED in handleMessage: %v (Tenant: %s, App: %s, Job: %s)", r, tenantID, appID, jobID)
+			msg.NakWithDelay(15 * time.Second)
+		}
+	}()
+
 	ctx, cancel := context.WithTimeout(context.Background(), 60*time.Second)
 	defer cancel()
 
@@ -124,8 +144,9 @@ func (h *JetStreamHandler) handleMessage(msg jetstream.Msg) {
 	}
 
 	t, a, j := natsutil.ExtractIdentity(req.Identity)
+	tenantID, appID, jobID = t, a, j
 
-	payloadMap := map[string]interface{}{}
+	payloadMap := map[string]any{}
 	if req.Payload != nil {
 		payloadMap = req.Payload.AsMap()
 	}
@@ -147,9 +168,9 @@ func (h *JetStreamHandler) handleMessage(msg jetstream.Msg) {
 
 	graphID := getString("graph_id")
 	initialNodeID := getString("initial_node_id")
-	
+
 	nodeName := ""
-	if nc, ok := payloadMap[payloadkeys.NodeConfigKey].(map[string]interface{}); ok {
+	if nc, ok := payloadMap[payloadkeys.NodeConfigKey].(map[string]any); ok {
 		if nn, ok := nc["node_name"].(string); ok {
 			nodeName = nn
 		}
@@ -207,7 +228,7 @@ func (h *JetStreamHandler) handleMessage(msg jetstream.Msg) {
 	logger.Info("SemanticCache", "Received action request on subject: %s (graph_id: %s, initial_node_id: %s)", subject, graphID, initialNodeID)
 
 	var cacheConfig *pb.CacheContract
-	if cc, ok := payloadMap[payloadkeys.CacheKey].(map[string]interface{}); ok {
+	if cc, ok := payloadMap[payloadkeys.CacheKey].(map[string]any); ok {
 		cacheConfig = &pb.CacheContract{}
 		if colName, ok := cc["collection_name"].(string); ok {
 			cacheConfig.CollectionName = colName
@@ -215,12 +236,12 @@ func (h *JetStreamHandler) handleMessage(msg jetstream.Msg) {
 		if conf, ok := cc["confidence"].(float64); ok {
 			cacheConfig.Confidence = float32(conf)
 		}
-		if meta, ok := cc["metadata_lookup"].(map[string]interface{}); ok {
+		if meta, ok := cc["metadata_lookup"].(map[string]any); ok {
 			if st, err := structpb.NewStruct(meta); err == nil {
 				cacheConfig.MetadataLookup = st
 			}
 		}
-		if emb, ok := cc["embedding_lookup"].(map[string]interface{}); ok {
+		if emb, ok := cc["embedding_lookup"].(map[string]any); ok {
 			anyMsg := &anypb.Any{}
 			if typeUrl, ok := emb["type_url"].(string); ok {
 				anyMsg.TypeUrl = typeUrl
@@ -243,9 +264,9 @@ func (h *JetStreamHandler) handleMessage(msg jetstream.Msg) {
 	}
 
 	metadata := make(map[string]any)
-	if md, ok := payloadMap[payloadkeys.MetadataKey].(map[string]interface{}); ok {
+	if md, ok := payloadMap[payloadkeys.MetadataKey].(map[string]any); ok {
 		// Unwrap "values" if it's the strongly-typed MetadataPayload
-		if valuesWrapper, hasValues := md["values"].(map[string]interface{}); hasValues {
+		if valuesWrapper, hasValues := md["values"].(map[string]any); hasValues {
 			for k, v := range valuesWrapper {
 				metadata[k] = v
 			}
@@ -281,12 +302,12 @@ func (h *JetStreamHandler) handleMessage(msg jetstream.Msg) {
 			return
 		}
 
-		var matchedPayloadObj interface{}
+		var matchedPayloadObj any
 		if payload != "" {
 			matchedPayloadObj = json.RawMessage(payload)
 		}
 
-		resultMap := map[string]interface{}{
+		resultMap := map[string]any{
 			"semanticCacheResult": hitStr(hit),
 			"confidence":          confidence,
 			"matchedPayload":      matchedPayloadObj,
@@ -350,7 +371,7 @@ func (h *JetStreamHandler) handleMessage(msg jetstream.Msg) {
 			return
 		}
 
-		resultMap := map[string]interface{}{
+		resultMap := map[string]any{
 			"semanticCacheResult": "updated",
 		}
 		resultBytes, _ := json.Marshal(resultMap)

@@ -370,13 +370,13 @@ func TestChallenger_BackgroundUpdateCorruptNodeOutput(t *testing.T) {
 		meta:    &jetstream.MsgMetadata{NumDelivered: 1},
 	}
 
-	defer func() {
-		if r := recover(); r == nil {
-			t.Errorf("Expected panic for missing node_output")
-		}
-	}()
-
 	h.handleMessage(msg)
+	
+	msg.mu.Lock()
+	defer msg.mu.Unlock()
+	if !msg.nacked {
+		t.Errorf("Expected msg to be nacked for missing node_output")
+	}
 }
 
 // Empirical Test: StoreExtraction with Precomputed Vector Any
