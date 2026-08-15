@@ -30,7 +30,7 @@ func main() {
 	// Configuration
 	grpcPort := envutil.MustGetString("GRPC_PORT")
 	qdrantAddr := envutil.MustGetString("QDRANT_URL")
-	openaiURL := envutil.MustGetString("OPENAI_BASE_URL")
+	openaiURL := envutil.GetStringOrDefault("EMBEDDING_BASE_URL", envutil.MustGetString("OPENAI_BASE_URL"))
 	openaiModel := envutil.MustGetEmbeddingModel()
 	collectionName := envutil.MustGetString("QDRANT_COLLECTION")
 
