@@ -151,13 +151,7 @@ func (h *JetStreamHandler) handleMessage(msg jetstream.Msg) {
 		payloadMap = req.Payload.AsMap()
 	}
 
-	reqBytes, err := protojson.Marshal(req)
-	if err == nil {
-		logger.Info("SemanticCache", "DEQUEUED Input Payload: %s", string(reqBytes))
-	} else {
-		payloadBytes, _ := json.Marshal(payloadMap)
-		logger.Info("SemanticCache", "DEQUEUED Input Payload: %s", string(payloadBytes))
-	}
+
 
 	getString := func(k string) string {
 		if v, ok := payloadMap[k].(string); ok {
@@ -461,13 +455,7 @@ func (h *JetStreamHandler) sendSuccessReply(ctx context.Context, msg jetstream.M
 		ActionResult: &resultStruct,
 	}
 	_, _, jobId := natsutil.ExtractIdentity(reqIdentity)
-	outBytes, err := protojson.Marshal(&resultStruct)
-	if err == nil {
-		logger.Info("SemanticCache", "DISPATCHING ActionResult Output for JobId %s:\n%s", jobId, string(outBytes))
-	} else {
-		outJson, _ := json.Marshal(resultStruct.AsMap())
-		logger.Info("SemanticCache", "DISPATCHING ActionResult Output for JobId %s:\n%s", jobId, string(outJson))
-	}
+	logger.Info("SemanticCache", "DISPATCHING ActionResult Output for JobId %s (Success: true)", jobId)
 	return h.publishReply(ctx, replySubj, resp, reqIdentity)
 }
 

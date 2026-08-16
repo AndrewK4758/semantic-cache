@@ -37,8 +37,7 @@ func (h *SemanticCacheHandler) CheckCache(ctx context.Context, req *pb.CheckCach
 		return nil, status.Error(codes.InvalidArgument, "CollectionName is required")
 	}
 
-	reqJson, _ := protojson.Marshal(req)
-	logger.Info("SemanticCache", "INFO: [gRPC] Received CheckCache request: %s", string(reqJson))
+	logger.Info("SemanticCache", "INFO: [gRPC] Received CheckCache request for Collection: %s, JobId: %s", req.CollectionName, req.Identity.JobId)
 
 	contract := &pb.CacheContract{
 		Enabled:         req.Enabled,
@@ -73,8 +72,7 @@ func (h *SemanticCacheHandler) StoreExtraction(ctx context.Context, req *pb.Stor
 		return nil, status.Error(codes.InvalidArgument, "CollectionName is required")
 	}
 
-	reqJson, _ := protojson.Marshal(req)
-	logger.Info("SemanticCache", "INFO: [gRPC] Received StoreExtraction request: %s", string(reqJson))
+	logger.Info("SemanticCache", "INFO: [gRPC] Received StoreExtraction request for Collection: %s, JobId: %s", req.CollectionName, req.Identity.JobId)
 
 	var metaMap map[string]any
 	if req.Metadata != nil {
@@ -100,8 +98,7 @@ func (h *SemanticCacheHandler) SeedCache(ctx context.Context, req *pb.SeedCacheR
 		return nil, status.Error(codes.InvalidArgument, "CollectionName is required")
 	}
 
-	reqJson, _ := protojson.Marshal(req)
-	logger.Info("SemanticCache", "INFO: [gRPC] Received SeedCache request: %s", string(reqJson))
+	logger.Info("SemanticCache", "INFO: [gRPC] Received SeedCache request for Collection: %s, JobId: %s", req.CollectionName, req.Identity.JobId)
 
 	// Seeding uses the exact same underlying logic as storing an extraction
 	var metaMap map[string]any
@@ -128,8 +125,7 @@ func (h *SemanticCacheHandler) CheckMetadataExists(ctx context.Context, req *pb.
 		return nil, status.Error(codes.InvalidArgument, "CollectionName is required")
 	}
 
-	reqJson, _ := protojson.Marshal(req)
-	logger.Info("SemanticCache", "INFO: [gRPC] Received CheckMetadataExists request: %s", string(reqJson))
+	logger.Info("SemanticCache", "INFO: [gRPC] Received CheckMetadataExists request for Collection: %s, JobId: %s", req.CollectionName, req.Identity.JobId)
 
 	var metaMap map[string]any
 	if req.Metadata != nil {

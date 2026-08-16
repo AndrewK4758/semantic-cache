@@ -120,7 +120,7 @@ func (a *SemanticCacheApp) CheckCache(ctx context.Context, contract *pb.CacheCon
 
 	logger.Info("SemanticCache", "INFO: [SemanticCacheApp] CheckCache invoked. Collection: %s, Input Text Length: %d, Threshold: %.2f", collectionName, len(text), threshold)
 	if text != "" {
-		logger.Info("SemanticCache", "INFO: [SemanticCacheApp] Query Input:\n%s", text)
+		logger.Info("SemanticCache", "INFO: [SemanticCacheApp] Query Input received (length: %d)", len(text))
 	}
 
 	// Extract metadata from CacheContract
@@ -143,7 +143,6 @@ func (a *SemanticCacheApp) CheckCache(ctx context.Context, contract *pb.CacheCon
 		if metaErr == nil && len(metaResults) > 0 {
 			topMatch := metaResults[0]
 			logger.Info("SemanticCache", "INFO: [SemanticCacheApp] CACHE HIT [METADATA_EXACT_MATCH]! Bypassing embedding generation.")
-			logger.Info("SemanticCache", "INFO: [SemanticCacheApp] Cached Payload Output:\n%s", topMatch.Record.JSONPayload)
 			return true, topMatch.Record.JSONPayload, 1.0, nil
 		}
 		logger.Info("SemanticCache", "INFO: [SemanticCacheApp] Stage 1 Miss: No exact metadata match found. Proceeding to Stage 2 Embedding Fallback.")
@@ -163,7 +162,7 @@ func (a *SemanticCacheApp) CheckCache(ctx context.Context, contract *pb.CacheCon
 	}
 
 	if len(vector) == 0 {
-		logger.Info("SemanticCache", "INFO: [SemanticCacheApp] Stage 2: Generating embedding for input text: %s", text)
+		logger.Info("SemanticCache", "INFO: [SemanticCacheApp] Stage 2: Generating embedding for input text (length: %d)", len(text))
 		vector, embedErr = a.embedder.Generate(ctx, text)
 		if embedErr != nil {
 			logger.Info("SemanticCache", "ERROR: [SemanticCacheApp] Failed to generate embedding: %v", embedErr)
@@ -189,7 +188,6 @@ func (a *SemanticCacheApp) CheckCache(ctx context.Context, contract *pb.CacheCon
 		logger.Info("SemanticCache", "INFO: [SemanticCacheApp] Vector search returned top match with Cosine Similarity Score: %.4f (Threshold: %.2f)", topMatch.Score, threshold)
 		if topMatch.Score >= threshold {
 			logger.Info("SemanticCache", "INFO: [SemanticCacheApp] CACHE HIT [SEMANTIC_SIMILARITY]! Score %.4f exceeds threshold. Returning cached payload.", topMatch.Score)
-			logger.Info("SemanticCache", "INFO: [SemanticCacheApp] Cached Payload Output:\n%s", topMatch.Record.JSONPayload)
 			return true, topMatch.Record.JSONPayload, topMatch.Score, nil
 		}
 		logger.Info("SemanticCache", "INFO: [SemanticCacheApp] CACHE MISS. Score %.4f is below threshold %.2f.", topMatch.Score, threshold)
