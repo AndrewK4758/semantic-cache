@@ -139,8 +139,8 @@ func (h *JetStreamHandler) handleMessage(msg jetstream.Msg) {
 
 	identityparser.NewIdentityParser(req.GetIdentity()).MustValidate(true, "JetStreamConsume")
 
-	if req.GetTaskSubject() == "" {
-		panic(fmt.Errorf("action failed for job JetStreamConsume: missing required TaskSubject"))
+	if req.GetTaskSubject() == pb.WorkerSubject_WORKER_SUBJECT_UNSPECIFIED {
+		panic(fmt.Errorf("action failed for SemanticCache_NatsWorker: missing required TaskSubject"))
 	}
 
 	t, a, j := natsutil.ExtractIdentity(req.Identity)
