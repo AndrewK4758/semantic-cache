@@ -206,3 +206,42 @@ func (h *SemanticCacheHandler) RegisterBlankDocument(ctx context.Context, req *p
 	logger.Info("SemanticCache", "INFO: [gRPC] RegisterBlankDocument successful.")
 	return &pb.RegisterBlankDocumentResponse{Success: true}, nil
 }
+
+// MaskEntities handles the MaskEntities gRPC request.
+func (h *SemanticCacheHandler) MaskEntities(ctx context.Context, req *pb.MaskEntitiesRequest) (*pb.MaskEntitiesResponse, error) {
+	if err := identityparser.NewIdentityParser(req.GetIdentity()).Validate(true); err != nil {
+		logger.Error("SemanticCache", "FAIL-FAST ASSERTION FAILED [gRPC MaskEntities]: %v", err)
+		return nil, status.Errorf(codes.InvalidArgument, "invalid identity: %v", err)
+	}
+
+	logger.Info("SemanticCache", "INFO: [gRPC] Received MaskEntities request for JobId: %s, EntityCount: %d", req.GetIdentity().GetJobId(), len(req.GetEntities()))
+
+	resp, err := h.app.MaskEntities(ctx, req)
+	if err != nil {
+		logger.Error("SemanticCache", "ERROR: [gRPC] MaskEntities failed: %v", err)
+		return nil, fmt.Errorf("application layer MaskEntities failed: %w", err)
+	}
+
+	logger.Info("SemanticCache", "INFO: [gRPC] MaskEntities successful. TotalReplacements=%d", resp.GetTotalReplacements())
+	return resp, nil
+}
+
+// SemanticChunkDocument handles the SemanticChunkDocument gRPC request.
+func (h *SemanticCacheHandler) SemanticChunkDocument(ctx context.Context, req *pb.SemanticChunkDocumentRequest) (*pb.SemanticChunkDocumentResponse, error) {
+	if err := identityparser.NewIdentityParser(req.GetIdentity()).Validate(true); err != nil {
+		logger.Error("SemanticCache", "FAIL-FAST ASSERTION FAILED [gRPC SemanticChunkDocument]: %v", err)
+		return nil, status.Errorf(codes.InvalidArgument, "invalid identity: %v", err)
+	}
+
+	logger.Info("SemanticCache", "INFO: [gRPC] Received SemanticChunkDocument request for DocType: %s, JobId: %s", req.GetDocumentType(), req.GetIdentity().GetJobId())
+
+	resp, err := h.app.SemanticChunkDocument(ctx, req)
+	if err != nil {
+		logger.Error("SemanticCache", "ERROR: [gRPC] SemanticChunkDocument failed: %v", err)
+		return nil, fmt.Errorf("application layer SemanticChunkDocument failed: %w", err)
+	}
+
+	logger.Info("SemanticCache", "INFO: [gRPC] SemanticChunkDocument successful. TotalChunks=%d, TotalTokens=%d", resp.GetTotalChunks(), resp.GetTotalTokens())
+	return resp, nil
+}
+

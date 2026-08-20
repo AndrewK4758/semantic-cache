@@ -10,8 +10,11 @@ import (
 
 	pb "github.com/AndrewK4758/shared_protos"
 	"github.com/AndrewK4758/shared_utils/logger"
+	"github.com/doc_processor/semantic_cache_service/internal/chunker"
 	"github.com/doc_processor/semantic_cache_service/internal/domain"
+	"github.com/doc_processor/semantic_cache_service/internal/masking"
 	"google.golang.org/protobuf/types/known/anypb"
+
 	"google.golang.org/protobuf/types/known/structpb"
 	"google.golang.org/protobuf/types/known/wrapperspb"
 )
@@ -289,3 +292,87 @@ func (a *SemanticCacheApp) CheckMetadata(ctx context.Context, collectionName str
 	logger.Info("SemanticCache", "INFO: [SemanticCacheApp] CheckMetadata successful. Exists: %v", exists)
 	return exists, nil
 }
+
+// MaskEntities processes natural entity surrogate masking for a document.
+func (a *SemanticCacheApp) MaskEntities(ctx context.Context, req *pb.MaskEntitiesRequest) (*pb.MaskEntitiesResponse, error) {
+	if req == nil {
+		panic(fmt.Errorf("action failed for job MaskEntities: request cannot be nil"))
+	}
+	identity := req.GetIdentity()
+	if identity == nil {
+		panic("missing required property: identity cannot be nil")
+	}
+	if strings.TrimSpace(identity.TenantId) == "" {
+		panic("missing required property: TenantId is required")
+	}
+	if strings.TrimSpace(identity.AppId) == "" {
+		panic("missing required property: AppId is required")
+	}
+	if strings.TrimSpace(identity.JobId) == "" {
+		panic("missing required property: JobId is required")
+	}
+
+	masker := masking.NewEntityMasker()
+	maskedText, surrogateMap, totalCount := masker.MaskText(req.GetDocumentText(), req.GetEntities())
+
+	return &pb.MaskEntitiesResponse{
+		MaskedText:        maskedText,
+		SurrogateMap:      surrogateMap,
+		TotalReplacements: int32(totalCount),
+	}, nil
+}
+
+// SemanticChunkDocument processes section-isolated document chunking with metadata header injection and optional masking.
+func (a *SemanticCacheApp) SemanticChunkDocument(ctx context.Context, req *pb.SemanticChunkDocumentRequest) (*pb.SemanticChunkDocumentResponse, error) {
+	if req == nil {
+		panic(fmt.Errorf("action failed for job SemanticChunkDocument: request cannot be nil"))
+	}
+	identity := req.GetIdentity()
+	if identity == nil {
+		panic("missing required property: identity cannot be nil")
+	}
+	if strings.TrimSpace(identity.TenantId) == "" {
+		panic("missing required property: TenantId is required")
+	}
+	if strings.TrimSpace(identity.AppId) == "" {
+		panic("missing required property: AppId is required")
+	}
+	if strings.TrimSpace(identity.JobId) == "" {
+		panic("missing required property: JobId is required")
+	}
+
+	textToChunk := req.GetDocumentText()
+	var surrogateMap map[string]string
+
+	if req.GetApplyMasking() && len(req.GetEntities()) > 0 {
+		masker := masking.NewEntityMasker()
+		var count int
+		textToChunk, surrogateMap, count = masker.MaskText(textToChunk, req.GetEntities())
+		logger.Info("SemanticCache", "INFO: [SemanticCacheApp] Masked %d entity occurrences before chunking", count)
+	}
+
+	maxTokens := int(req.GetMaxChunkTokens())
+	if maxTokens <= 0 {
+		maxTokens = 512
+	}
+	overlapTokens := int(req.GetOverlapTokens())
+	if overlapTokens < 0 {
+		overlapTokens = 50
+	}
+
+	sc := chunker.NewSectionChunker(maxTokens, overlapTokens)
+	chunks := sc.ChunkDocument(textToChunk, req.GetDocumentType(), identity)
+
+	totalTokens := 0
+	for _, chunk := range chunks {
+		totalTokens += int(chunk.GetTokenCount())
+	}
+
+	return &pb.SemanticChunkDocumentResponse{
+		Chunks:       chunks,
+		SurrogateMap: surrogateMap,
+		TotalChunks:  int32(len(chunks)),
+		TotalTokens:  int32(totalTokens),
+	}, nil
+}
+

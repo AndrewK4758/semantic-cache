@@ -332,4 +332,38 @@ func TestGRPCHandler_EmptyCollectionNameValidation(t *testing.T) {
 		_, err := h.RegisterBlankDocument(ctx, &pb.RegisterBlankDocumentRequest{CollectionName: "", EmbeddingPayload: anyPayload, Identity: identity})
 		assertInvalidArgument("RegisterBlankDocument", err)
 	})
+
+	t.Run("MaskEntities and SemanticChunkDocument Happy Path", func(t *testing.T) {
+		maskResp, err := h.MaskEntities(ctx, &pb.MaskEntitiesRequest{
+			Identity:     identity,
+			DocumentText: "Borrower John Doe bought property at 123 Main St.",
+			Entities: []*pb.ExtractedEntity{
+				{EntityType: "PERSON", RawValue: "John Doe"},
+				{EntityType: "LOCATION", RawValue: "123 Main St."},
+			},
+		})
+		if err != nil {
+			t.Fatalf("unexpected error in MaskEntities: %v", err)
+		}
+		if maskResp.TotalReplacements != 2 {
+			t.Fatalf("expected 2 replacements, got %d", maskResp.TotalReplacements)
+		}
+
+		chunkResp, err := h.SemanticChunkDocument(ctx, &pb.SemanticChunkDocumentRequest{
+			Identity:        identity,
+			DocumentType:    "ClosingDisclosure",
+			DocumentText:    "# Section 1\nBorrower John Doe agreed to terms.",
+			Entities:        []*pb.ExtractedEntity{{EntityType: "PERSON", RawValue: "John Doe"}},
+			ApplyMasking:    true,
+			MaxChunkTokens:  512,
+			OverlapTokens:   50,
+		})
+		if err != nil {
+			t.Fatalf("unexpected error in SemanticChunkDocument: %v", err)
+		}
+		if chunkResp.TotalChunks == 0 {
+			t.Fatalf("expected at least 1 chunk, got 0")
+		}
+	})
 }
+
