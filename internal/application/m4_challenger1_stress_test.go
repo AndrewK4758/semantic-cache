@@ -84,6 +84,19 @@ func (m *concurrentMockVectorStore) GetByMetadata(ctx context.Context, collectio
 	return results, nil
 }
 
+func (m *concurrentMockVectorStore) EnsureCollection(ctx context.Context, collectionName string, denseDim uint64, pqCompression uint32) error {
+	return nil
+}
+
+func (m *concurrentMockVectorStore) UpsertHybrid(ctx context.Context, collectionName string, record domain.CacheRecord) error {
+	return m.Upsert(ctx, collectionName, record)
+}
+
+func (m *concurrentMockVectorStore) HybridSearch(ctx context.Context, collectionName string, denseVector []float32, sparseVector *domain.SparseVector, identity *pb.InfrastructureIdentity, metadata map[string]any, alpha float32, limit int) ([]domain.SearchResult, error) {
+	return m.Search(ctx, collectionName, denseVector, identity, metadata, limit)
+}
+
+
 // TestM4Challenger_HighConcurrency_MultiTenant_Isolation stress tests the semantic_cache_service application layer
 // under 100 concurrent workers across 10 distinct tenants and 5 apps.
 func TestM4Challenger_HighConcurrency_MultiTenant_Isolation(t *testing.T) {

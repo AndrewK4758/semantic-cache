@@ -3,6 +3,8 @@ package qdrant
 import (
 	"context"
 	"fmt"
+	"sort"
+	"strings"
 
 	docpb "github.com/AndrewK4758/shared_protos"
 	"github.com/doc_processor/semantic_cache_service/internal/domain"
@@ -13,6 +15,7 @@ import (
 
 type Client struct {
 	qdrantClient      pb.PointsClient
+	collectionsClient pb.CollectionsClient
 	defaultCollection string
 	conn              *grpc.ClientConn
 }
@@ -24,10 +27,12 @@ func NewClient(addr string, collection string) (*Client, error) {
 		return nil, fmt.Errorf("failed to connect to qdrant: %w", err)
 	}
 
-	client := pb.NewPointsClient(conn)
+	pointsClient := pb.NewPointsClient(conn)
+	collectionsClient := pb.NewCollectionsClient(conn)
 
 	return &Client{
-		qdrantClient:      client,
+		qdrantClient:      pointsClient,
+		collectionsClient: collectionsClient,
 		defaultCollection: collection,
 		conn:              conn,
 	}, nil
@@ -53,7 +58,7 @@ func buildConditions(identity *docpb.InfrastructureIdentity, metadata map[string
 	}
 
 	for k, v := range metadata {
-		if strVal, ok := v.(string); ok {
+		if strVal, ok := v.(string); ok && strings.TrimSpace(strVal) != "" {
 			conditions = append(conditions, makeKeywordCondition(k, strVal))
 		}
 	}
@@ -75,7 +80,272 @@ func makeKeywordCondition(key, val string) *pb.Condition {
 	}
 }
 
-// Search implements the domain.VectorStore interface.
+// EnsureCollection provisions the Qdrant collection with named vectors, PQ, and payload indexes.
+func (c *Client) EnsureCollection(ctx context.Context, collectionName string, denseDim uint64, pqCompression uint32) error {
+	if collectionName == "" {
+		collectionName = c.defaultCollection
+	}
+	if collectionName == "" {
+		panic("collectionName is required")
+	}
+	if denseDim == 0 {
+		denseDim = 3072
+	}
+
+	// 1. Check if collection already exists
+	_, err := c.collectionsClient.Get(ctx, &pb.GetCollectionInfoRequest{CollectionName: collectionName})
+	if err == nil {
+		return nil // Collection already exists
+	}
+
+	// 2. Configure Named Vectors: dense (Cosine) + sparse (Dot)
+	vectorsConfig := &pb.VectorsConfig{
+		Config: &pb.VectorsConfig_ParamsMap{
+			ParamsMap: &pb.VectorParamsMap{
+				Map: map[string]*pb.VectorParams{
+					"dense": {
+						Size:     denseDim,
+						Distance: pb.Distance_Cosine,
+					},
+				},
+			},
+		},
+	}
+
+	sparseConfig := &pb.SparseVectorConfig{
+		Map: map[string]*pb.SparseVectorParams{
+			"sparse": {},
+		},
+	}
+
+	alwaysRam := true
+	quantizationConfig := &pb.QuantizationConfig{
+		Quantization: &pb.QuantizationConfig_Product{
+			Product: &pb.ProductQuantization{
+				Compression: pb.CompressionRatio_x4,
+				AlwaysRam:   &alwaysRam,
+			},
+		},
+	}
+
+	createReq := &pb.CreateCollection{
+		CollectionName:      collectionName,
+		VectorsConfig:       vectorsConfig,
+		SparseVectorsConfig: sparseConfig,
+		QuantizationConfig:  quantizationConfig,
+	}
+
+	_, createErr := c.collectionsClient.Create(ctx, createReq)
+	if createErr != nil {
+		return fmt.Errorf("failed to create collection %s: %w", collectionName, createErr)
+	}
+
+	// 3. Register Keyword Payload Schema Indexes
+	indexedFields := []string{"tenant_id", "app_id", "doc_type", "section_title"}
+	fieldType := pb.FieldType_FieldTypeKeyword
+	for _, field := range indexedFields {
+		_, _ = c.qdrantClient.CreateFieldIndex(ctx, &pb.CreateFieldIndexCollection{
+			CollectionName: collectionName,
+			FieldName:      field,
+			FieldType:      &fieldType,
+		})
+	}
+
+
+	return nil
+}
+
+// UpsertHybrid upserts a CacheRecord with dual dense + sparse vectors.
+func (c *Client) UpsertHybrid(ctx context.Context, collectionName string, record domain.CacheRecord) error {
+	if collectionName == "" {
+		collectionName = c.defaultCollection
+	}
+	if collectionName == "" {
+		panic("collectionName is required")
+	}
+
+	if len(record.ID) >= 32 {
+		record.ID = fmt.Sprintf("%s-%s-%s-%s-%s",
+			record.ID[0:8], record.ID[8:12], record.ID[12:16], record.ID[16:20], record.ID[20:32])
+	}
+
+	pointId := &pb.PointId{
+		PointIdOptions: &pb.PointId_Uuid{
+			Uuid: record.ID,
+		},
+	}
+
+	payload := map[string]*pb.Value{}
+	if record.JSONPayload != "" {
+		payload["json_payload"] = &pb.Value{Kind: &pb.Value_StringValue{StringValue: record.JSONPayload}}
+	}
+	if record.Identity != nil {
+		if record.Identity.TenantId != "" {
+			payload["tenant_id"] = &pb.Value{Kind: &pb.Value_StringValue{StringValue: record.Identity.TenantId}}
+		}
+		if record.Identity.AppId != "" {
+			payload["app_id"] = &pb.Value{Kind: &pb.Value_StringValue{StringValue: record.Identity.AppId}}
+		}
+		if record.Identity.JobId != "" {
+			payload["job_id"] = &pb.Value{Kind: &pb.Value_StringValue{StringValue: record.Identity.JobId}}
+		}
+	}
+
+	for k, v := range record.Metadata {
+		if strVal, ok := v.(string); ok {
+			payload[k] = &pb.Value{Kind: &pb.Value_StringValue{StringValue: strVal}}
+		}
+	}
+
+	namedVectors := map[string]*pb.Vector{}
+	if len(record.Vector) > 0 {
+		namedVectors["dense"] = pb.NewVectorDense(record.Vector)
+	}
+	if record.SparseVec != nil && len(record.SparseVec.Indices) > 0 {
+		namedVectors["sparse"] = pb.NewVectorSparse(record.SparseVec.Indices, record.SparseVec.Values)
+	}
+
+	req := &pb.UpsertPoints{
+		CollectionName: collectionName,
+		Points: []*pb.PointStruct{
+			{
+				Id: pointId,
+				Vectors: &pb.Vectors{
+					VectorsOptions: &pb.Vectors_Vectors{
+						Vectors: &pb.NamedVectors{
+							Vectors: namedVectors,
+						},
+					},
+				},
+				Payload: payload,
+			},
+		},
+	}
+
+	_, err := c.qdrantClient.Upsert(ctx, req)
+	if err != nil {
+		return fmt.Errorf("action failed for job QdrantUpsertHybrid: grpc call failed: %w", err)
+	}
+
+	return nil
+}
+
+// HybridSearch executes convex combination search over dense and sparse named vectors.
+func (c *Client) HybridSearch(ctx context.Context, collectionName string, denseVector []float32, sparseVector *domain.SparseVector, identity *docpb.InfrastructureIdentity, metadata map[string]any, alpha float32, limit int) ([]domain.SearchResult, error) {
+	if collectionName == "" {
+		collectionName = c.defaultCollection
+	}
+	if collectionName == "" {
+		panic("collectionName is required")
+	}
+	if alpha <= 0 {
+		alpha = 0.7
+	}
+	if limit <= 0 {
+		limit = 10
+	}
+
+	conditions := buildConditions(identity, metadata)
+	filter := &pb.Filter{
+		Must: conditions,
+	}
+
+	type matchInfo struct {
+		result      domain.SearchResult
+		denseScore  float32
+		sparseScore float32
+	}
+	merged := make(map[string]*matchInfo)
+
+	denseName := "dense"
+	// 1. Search Dense Vector
+	if len(denseVector) > 0 {
+		denseReq := &pb.SearchPoints{
+			CollectionName: collectionName,
+			Vector:         denseVector,
+			VectorName:     &denseName,
+			Filter:         filter,
+			Limit:          uint64(limit),
+			WithPayload:    &pb.WithPayloadSelector{SelectorOptions: &pb.WithPayloadSelector_Enable{Enable: true}},
+		}
+		denseResp, err := c.qdrantClient.Search(ctx, denseReq)
+		if err == nil && denseResp != nil {
+			for _, pt := range denseResp.Result {
+				idStr, recId, meta, payload := parsePointData(pt.Id, pt.Payload, identity)
+				merged[idStr] = &matchInfo{
+					result: domain.SearchResult{
+						Record: domain.CacheRecord{
+							ID:          idStr,
+							Identity:    recId,
+							Metadata:    meta,
+							Vector:      denseVector,
+							JSONPayload: payload,
+						},
+					},
+					denseScore: pt.Score,
+				}
+			}
+		}
+	}
+
+	sparseName := "sparse"
+	// 2. Search Sparse Vector
+	if sparseVector != nil && len(sparseVector.Indices) > 0 {
+		sparseReq := &pb.SearchPoints{
+			CollectionName: collectionName,
+			Vector:         sparseVector.Values,
+			SparseIndices:  &pb.SparseIndices{Data: sparseVector.Indices},
+			VectorName:     &sparseName,
+			Filter:         filter,
+			Limit:          uint64(limit),
+			WithPayload:    &pb.WithPayloadSelector{SelectorOptions: &pb.WithPayloadSelector_Enable{Enable: true}},
+		}
+		sparseResp, err := c.qdrantClient.Search(ctx, sparseReq)
+		if err == nil && sparseResp != nil {
+			for _, pt := range sparseResp.Result {
+				idStr, recId, meta, payload := parsePointData(pt.Id, pt.Payload, identity)
+				if existing, exists := merged[idStr]; exists {
+					existing.sparseScore = pt.Score
+				} else {
+					merged[idStr] = &matchInfo{
+						result: domain.SearchResult{
+							Record: domain.CacheRecord{
+								ID:          idStr,
+								Identity:    recId,
+								Metadata:    meta,
+								JSONPayload: payload,
+							},
+						},
+						sparseScore: pt.Score,
+					}
+				}
+			}
+		}
+	}
+
+	// 3. Compute Convex Linear Score and Sort
+	var results []domain.SearchResult
+	for _, info := range merged {
+		combinedScore := (alpha * info.denseScore) + ((1.0 - alpha) * info.sparseScore)
+		res := info.result
+		res.Score = combinedScore
+		res.DenseScore = info.denseScore
+		res.SparseScore = info.sparseScore
+		results = append(results, res)
+	}
+
+	sort.Slice(results, func(i, j int) bool {
+		return results[i].Score > results[j].Score
+	})
+
+	if len(results) > limit {
+		results = results[:limit]
+	}
+
+	return results, nil
+}
+
+// Search implements the legacy domain.VectorStore interface.
 func (c *Client) Search(ctx context.Context, collectionName string, vector []float32, identity *docpb.InfrastructureIdentity, metadata map[string]any, limit int) ([]domain.SearchResult, error) {
 	if collectionName == "" {
 		collectionName = c.defaultCollection
@@ -125,7 +395,7 @@ func (c *Client) Search(ctx context.Context, collectionName string, vector []flo
 	return results, nil
 }
 
-// Upsert implements the domain.VectorStore interface.
+// Upsert implements the legacy domain.VectorStore interface.
 func (c *Client) Upsert(ctx context.Context, collectionName string, record domain.CacheRecord) error {
 	if collectionName == "" {
 		collectionName = c.defaultCollection
@@ -134,7 +404,6 @@ func (c *Client) Upsert(ctx context.Context, collectionName string, record domai
 		panic("collectionName is required")
 	}
 
-	// Create UUID string from hex: 8-4-4-4-12
 	if len(record.ID) >= 32 {
 		record.ID = fmt.Sprintf("%s-%s-%s-%s-%s",
 			record.ID[0:8], record.ID[8:12], record.ID[12:16], record.ID[16:20], record.ID[20:32])
@@ -297,10 +566,10 @@ func (c *Client) GetByMetadata(ctx context.Context, collectionName string, ident
 				ID:          idStr,
 				Identity:    recordIdentity,
 				Metadata:    resultMetadata,
-				Vector:      nil, // No vector retrieved
+				Vector:      nil,
 				JSONPayload: payloadStr,
 			},
-			Score: 1.0, // Exact match metadata is treated as 100% confidence
+			Score: 1.0,
 		})
 	}
 

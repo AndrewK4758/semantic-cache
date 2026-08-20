@@ -60,6 +60,26 @@ func (m *mockVectorStore) GetByMetadata(ctx context.Context, collectionName stri
 	return nil, nil
 }
 
+func (m *mockVectorStore) EnsureCollection(ctx context.Context, collectionName string, denseDim uint64, pqCompression uint32) error {
+	return nil
+}
+
+func (m *mockVectorStore) UpsertHybrid(ctx context.Context, collectionName string, record domain.CacheRecord) error {
+	return nil
+}
+
+func (m *mockVectorStore) HybridSearch(ctx context.Context, collectionName string, denseVector []float32, sparseVector *domain.SparseVector, identity *pb.InfrastructureIdentity, metadata map[string]any, alpha float32, limit int) ([]domain.SearchResult, error) {
+	return []domain.SearchResult{
+		{
+			Record:      domain.CacheRecord{JSONPayload: `{"hybrid_hit": true}`},
+			Score:       0.95,
+			DenseScore:  0.96,
+			SparseScore: 0.92,
+		},
+	}, nil
+}
+
+
 // --- Tests ---
 
 func TestSemanticCacheApp_CheckCache(t *testing.T) {
@@ -579,3 +599,56 @@ func TestSemanticCacheApp_StoreExtraction_PrecomputedVector(t *testing.T) {
 		t.Fatalf("expected stored vector [0.11, 0.22, 0.33], got %v", storedVec)
 	}
 }
+
+func TestSemanticCacheApp_GenerateSparseEmbedding(t *testing.T) {
+	app := application.NewSemanticCacheApp(&mockEmbeddingService{}, &mockVectorStore{})
+	identity := &pb.InfrastructureIdentity{TenantId: "t1", AppId: "a1", JobId: "j1"}
+
+	resp, err := app.GenerateSparseEmbedding(context.Background(), &pb.GenerateSparseEmbeddingRequest{
+		Identity: identity,
+		Text:     "Closing disclosure for borrower John Doe",
+	})
+	if err != nil {
+		t.Fatalf("unexpected error: %v", err)
+	}
+	if resp.UniqueTerms == 0 || len(resp.SparseVector.Indices) == 0 {
+		t.Fatalf("expected non-empty sparse vector")
+	}
+}
+
+func TestSemanticCacheApp_HybridCheckCache_And_Store(t *testing.T) {
+	app := application.NewSemanticCacheApp(&mockEmbeddingService{}, &mockVectorStore{})
+	identity := &pb.InfrastructureIdentity{TenantId: "t1", AppId: "a1", JobId: "j1"}
+
+	storeResp, err := app.HybridStoreExtraction(context.Background(), &pb.HybridStoreExtractionRequest{
+		CollectionName:   "hybrid_coll",
+		Identity:         identity,
+		DocumentType:     "ClosingDisclosure",
+		SectionTitle:     "Terms",
+		ExtractedPayload: `{"approved": true}`,
+	})
+	if err != nil {
+		t.Fatalf("unexpected error in HybridStoreExtraction: %v", err)
+	}
+	if !storeResp.Success {
+		t.Fatalf("expected success=true")
+	}
+
+	checkResp, err := app.HybridCheckCache(context.Background(), &pb.HybridCheckCacheRequest{
+		CollectionName:      "hybrid_coll",
+		Identity:            identity,
+		QueryText:           "Closing terms",
+		ConfidenceThreshold: 0.8,
+		Alpha:               0.7,
+	})
+	if err != nil {
+		t.Fatalf("unexpected error in HybridCheckCache: %v", err)
+	}
+	if !checkResp.Hit {
+		t.Fatalf("expected hit=true")
+	}
+	if checkResp.CombinedScore <= 0 {
+		t.Fatalf("expected positive CombinedScore, got %f", checkResp.CombinedScore)
+	}
+}
+

@@ -13,6 +13,7 @@ import (
 	"github.com/doc_processor/semantic_cache_service/internal/chunker"
 	"github.com/doc_processor/semantic_cache_service/internal/domain"
 	"github.com/doc_processor/semantic_cache_service/internal/masking"
+	"github.com/doc_processor/semantic_cache_service/internal/sparse"
 	"google.golang.org/protobuf/types/known/anypb"
 
 	"google.golang.org/protobuf/types/known/structpb"
@@ -21,17 +22,20 @@ import (
 
 // SemanticCacheApp coordinates the semantic cache use cases.
 type SemanticCacheApp struct {
-	embedder domain.EmbeddingService
-	store    domain.VectorStore
+	embedder  domain.EmbeddingService
+	store     domain.VectorStore
+	sparseGen *sparse.SparseGenerator
 }
 
 // NewSemanticCacheApp creates a new application instance.
 func NewSemanticCacheApp(embedder domain.EmbeddingService, store domain.VectorStore) *SemanticCacheApp {
 	return &SemanticCacheApp{
-		embedder: embedder,
-		store:    store,
+		embedder:  embedder,
+		store:     store,
+		sparseGen: sparse.NewSparseGenerator(),
 	}
 }
+
 
 func purgeIgnoredMetadata(metaMap map[string]any) {
 	if metaMap == nil {
@@ -375,4 +379,181 @@ func (a *SemanticCacheApp) SemanticChunkDocument(ctx context.Context, req *pb.Se
 		TotalTokens:  int32(totalTokens),
 	}, nil
 }
+
+// GenerateSparseEmbedding generates deterministic term-frequency sparse vectors.
+func (a *SemanticCacheApp) GenerateSparseEmbedding(ctx context.Context, req *pb.GenerateSparseEmbeddingRequest) (*pb.GenerateSparseEmbeddingResponse, error) {
+	if req == nil {
+		panic(fmt.Errorf("action failed for job GenerateSparseEmbedding: request cannot be nil"))
+	}
+	identity := req.GetIdentity()
+	if identity == nil {
+		panic("missing required property: identity cannot be nil")
+	}
+	if strings.TrimSpace(identity.TenantId) == "" {
+		panic("missing required property: TenantId is required")
+	}
+	if strings.TrimSpace(identity.AppId) == "" {
+		panic("missing required property: AppId is required")
+	}
+	if strings.TrimSpace(identity.JobId) == "" {
+		panic("missing required property: JobId is required")
+	}
+
+	sVec := a.sparseGen.Generate(req.GetText())
+	return &pb.GenerateSparseEmbeddingResponse{
+		SparseVector: &pb.SparseVectorProto{
+			Indices: sVec.Indices,
+			Values:  sVec.Values,
+		},
+		UniqueTerms: int32(len(sVec.Indices)),
+	}, nil
+}
+
+// HybridCheckCache performs convex linear hybrid search over dense and sparse vectors.
+func (a *SemanticCacheApp) HybridCheckCache(ctx context.Context, req *pb.HybridCheckCacheRequest) (*pb.HybridCheckCacheResponse, error) {
+	if req == nil {
+		panic(fmt.Errorf("action failed for job HybridCheckCache: request cannot be nil"))
+	}
+	identity := req.GetIdentity()
+	if identity == nil {
+		panic("missing required property: identity cannot be nil")
+	}
+	if strings.TrimSpace(identity.TenantId) == "" {
+		panic("missing required property: TenantId is required")
+	}
+	if strings.TrimSpace(identity.AppId) == "" {
+		panic("missing required property: AppId is required")
+	}
+	if strings.TrimSpace(identity.JobId) == "" {
+		panic("missing required property: JobId is required")
+	}
+
+	denseVector := req.GetDenseVector()
+	if len(denseVector) == 0 && req.GetQueryText() != "" {
+		var err error
+		denseVector, err = a.embedder.Generate(ctx, req.GetQueryText())
+		if err != nil {
+			return nil, fmt.Errorf("failed to generate dense embedding: %w", err)
+		}
+	}
+
+	var sparseVec domain.SparseVector
+	if req.GetSparseVector() != nil && len(req.GetSparseVector().GetIndices()) > 0 {
+		sparseVec.Indices = req.GetSparseVector().GetIndices()
+		sparseVec.Values = req.GetSparseVector().GetValues()
+	} else if req.GetQueryText() != "" {
+		genVec := a.sparseGen.Generate(req.GetQueryText())
+		sparseVec.Indices = genVec.Indices
+		sparseVec.Values = genVec.Values
+	}
+
+	var metaMap map[string]any
+	if req.GetMetadataLookup() != nil {
+		metaMap = req.GetMetadataLookup().AsMap()
+	}
+
+	alpha := req.GetAlpha()
+	if alpha <= 0 {
+		alpha = 0.7
+	}
+
+	threshold := req.GetConfidenceThreshold()
+	if threshold <= 0 {
+		threshold = 0.85
+	}
+
+	results, err := a.store.HybridSearch(ctx, req.GetCollectionName(), denseVector, &sparseVec, identity, metaMap, alpha, 1)
+	if err != nil {
+		return nil, fmt.Errorf("hybrid search failed: %w", err)
+	}
+
+	if len(results) > 0 && results[0].Score >= threshold {
+		top := results[0]
+		return &pb.HybridCheckCacheResponse{
+			Hit:              true,
+			ExtractedPayload: top.Record.JSONPayload,
+			CombinedScore:    top.Score,
+			DenseScore:       top.DenseScore,
+			SparseScore:      top.SparseScore,
+		}, nil
+	}
+
+	return &pb.HybridCheckCacheResponse{
+		Hit: false,
+	}, nil
+}
+
+// HybridStoreExtraction stores dual dense and sparse vectors into the vector store.
+func (a *SemanticCacheApp) HybridStoreExtraction(ctx context.Context, req *pb.HybridStoreExtractionRequest) (*pb.HybridStoreExtractionResponse, error) {
+	if req == nil {
+		panic(fmt.Errorf("action failed for job HybridStoreExtraction: request cannot be nil"))
+	}
+	identity := req.GetIdentity()
+	if identity == nil {
+		panic("missing required property: identity cannot be nil")
+	}
+	if strings.TrimSpace(identity.TenantId) == "" {
+		panic("missing required property: TenantId is required")
+	}
+	if strings.TrimSpace(identity.AppId) == "" {
+		panic("missing required property: AppId is required")
+	}
+	if strings.TrimSpace(identity.JobId) == "" {
+		panic("missing required property: JobId is required")
+	}
+
+	var metaMap map[string]any
+	if req.GetMetadata() != nil {
+		metaMap = req.GetMetadata().AsMap()
+	} else {
+		metaMap = make(map[string]any)
+	}
+
+	if req.GetDocumentType() != "" {
+		metaMap["doc_type"] = req.GetDocumentType()
+	}
+	if req.GetSectionTitle() != "" {
+		metaMap["section_title"] = req.GetSectionTitle()
+	}
+
+	denseVector := req.GetDenseVector()
+	if len(denseVector) == 0 && req.GetExtractedPayload() != "" {
+		var err error
+		denseVector, err = a.embedder.Generate(ctx, req.GetExtractedPayload())
+		if err != nil {
+			return nil, fmt.Errorf("failed to generate dense vector for store: %w", err)
+		}
+	}
+
+	var sparseVec *domain.SparseVector
+	if req.GetSparseVector() != nil && len(req.GetSparseVector().GetIndices()) > 0 {
+		sparseVec = &domain.SparseVector{
+			Indices: req.GetSparseVector().GetIndices(),
+			Values:  req.GetSparseVector().GetValues(),
+		}
+	} else if req.GetExtractedPayload() != "" {
+		genVec := a.sparseGen.Generate(req.GetExtractedPayload())
+		sparseVec = &domain.SparseVector{
+			Indices: genVec.Indices,
+			Values:  genVec.Values,
+		}
+	}
+
+	record := domain.CacheRecord{
+		ID:          uuid.New().String(),
+		Identity:    identity,
+		Metadata:    metaMap,
+		Vector:      denseVector,
+		SparseVec:   sparseVec,
+		JSONPayload: req.GetExtractedPayload(),
+	}
+
+	err := a.store.UpsertHybrid(ctx, req.GetCollectionName(), record)
+	if err != nil {
+		return &pb.HybridStoreExtractionResponse{Success: false}, fmt.Errorf("upsert hybrid failed: %w", err)
+	}
+
+	return &pb.HybridStoreExtractionResponse{Success: true}, nil
+}
+
 

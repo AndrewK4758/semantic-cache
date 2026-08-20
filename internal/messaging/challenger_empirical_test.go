@@ -21,10 +21,13 @@ import (
 
 // MockVectorStore implements domain.VectorStore for challenger tests.
 type MockVectorStore struct {
-	SearchFunc        func(ctx context.Context, collectionName string, vector []float32, identity *pb.InfrastructureIdentity, metadata map[string]any, limit int) ([]domain.SearchResult, error)
-	UpsertFunc        func(ctx context.Context, collectionName string, record domain.CacheRecord) error
-	CheckMetadataFunc func(ctx context.Context, collectionName string, identity *pb.InfrastructureIdentity, metadata map[string]any) (bool, error)
-	GetByMetadataFunc func(ctx context.Context, collectionName string, identity *pb.InfrastructureIdentity, metadata map[string]any) ([]domain.SearchResult, error)
+	SearchFunc           func(ctx context.Context, collectionName string, vector []float32, identity *pb.InfrastructureIdentity, metadata map[string]any, limit int) ([]domain.SearchResult, error)
+	UpsertFunc           func(ctx context.Context, collectionName string, record domain.CacheRecord) error
+	CheckMetadataFunc    func(ctx context.Context, collectionName string, identity *pb.InfrastructureIdentity, metadata map[string]any) (bool, error)
+	GetByMetadataFunc    func(ctx context.Context, collectionName string, identity *pb.InfrastructureIdentity, metadata map[string]any) ([]domain.SearchResult, error)
+	EnsureCollectionFunc func(ctx context.Context, collectionName string, denseDim uint64, pqCompression uint32) error
+	UpsertHybridFunc     func(ctx context.Context, collectionName string, record domain.CacheRecord) error
+	HybridSearchFunc     func(ctx context.Context, collectionName string, denseVector []float32, sparseVector *domain.SparseVector, identity *pb.InfrastructureIdentity, metadata map[string]any, alpha float32, limit int) ([]domain.SearchResult, error)
 }
 
 func (m *MockVectorStore) Search(ctx context.Context, collectionName string, vector []float32, identity *pb.InfrastructureIdentity, metadata map[string]any, limit int) ([]domain.SearchResult, error) {
@@ -54,6 +57,28 @@ func (m *MockVectorStore) GetByMetadata(ctx context.Context, collectionName stri
 	}
 	return nil, nil
 }
+
+func (m *MockVectorStore) EnsureCollection(ctx context.Context, collectionName string, denseDim uint64, pqCompression uint32) error {
+	if m.EnsureCollectionFunc != nil {
+		return m.EnsureCollectionFunc(ctx, collectionName, denseDim, pqCompression)
+	}
+	return nil
+}
+
+func (m *MockVectorStore) UpsertHybrid(ctx context.Context, collectionName string, record domain.CacheRecord) error {
+	if m.UpsertHybridFunc != nil {
+		return m.UpsertHybridFunc(ctx, collectionName, record)
+	}
+	return m.Upsert(ctx, collectionName, record)
+}
+
+func (m *MockVectorStore) HybridSearch(ctx context.Context, collectionName string, denseVector []float32, sparseVector *domain.SparseVector, identity *pb.InfrastructureIdentity, metadata map[string]any, alpha float32, limit int) ([]domain.SearchResult, error) {
+	if m.HybridSearchFunc != nil {
+		return m.HybridSearchFunc(ctx, collectionName, denseVector, sparseVector, identity, metadata, alpha, limit)
+	}
+	return m.Search(ctx, collectionName, denseVector, identity, metadata, limit)
+}
+
 
 // MockEmbedder implements domain.EmbeddingService for challenger tests.
 type MockEmbedder struct {

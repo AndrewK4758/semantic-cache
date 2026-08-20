@@ -61,6 +61,28 @@ func (m *mockStore) GetByMetadata(ctx context.Context, collectionName string, id
 	return nil, nil
 }
 
+func (m *mockStore) EnsureCollection(ctx context.Context, collectionName string, denseDim uint64, pqCompression uint32) error {
+	return nil
+}
+
+func (m *mockStore) UpsertHybrid(ctx context.Context, collectionName string, record domain.CacheRecord) error {
+	m.records[record.ID] = record
+	return nil
+}
+
+func (m *mockStore) HybridSearch(ctx context.Context, collectionName string, denseVector []float32, sparseVector *domain.SparseVector, identity *pb.InfrastructureIdentity, metadata map[string]any, alpha float32, limit int) ([]domain.SearchResult, error) {
+	if len(m.records) == 0 {
+		return nil, nil
+	}
+	for _, r := range m.records {
+		return []domain.SearchResult{
+			{Record: r, Score: 0.95, DenseScore: 0.96, SparseScore: 0.92},
+		}, nil
+	}
+	return nil, nil
+}
+
+
 func TestGRPCHandler_NilIdentityEdgeCases(t *testing.T) {
 	store := newMockStore()
 	app := application.NewSemanticCacheApp(&mockEmbedder{}, store)
@@ -365,5 +387,52 @@ func TestGRPCHandler_EmptyCollectionNameValidation(t *testing.T) {
 			t.Fatalf("expected at least 1 chunk, got 0")
 		}
 	})
+
+	t.Run("GenerateSparseEmbedding Happy Path", func(t *testing.T) {
+		sparseResp, err := h.GenerateSparseEmbedding(ctx, &pb.GenerateSparseEmbeddingRequest{
+			Identity: identity,
+			Text:     "Closing disclosure for borrower John Doe on property 123 Main St.",
+		})
+		if err != nil {
+			t.Fatalf("unexpected error in GenerateSparseEmbedding: %v", err)
+		}
+		if sparseResp.UniqueTerms == 0 || len(sparseResp.SparseVector.Indices) == 0 {
+			t.Fatalf("expected non-empty sparse vector, got 0 terms")
+		}
+	})
+
+	t.Run("HybridStoreExtraction and HybridCheckCache Happy Path", func(t *testing.T) {
+		storeResp, err := h.HybridStoreExtraction(ctx, &pb.HybridStoreExtractionRequest{
+			CollectionName:   "hybrid_coll",
+			Identity:         identity,
+			DocumentType:     "ClosingDisclosure",
+			SectionTitle:     "Loan Terms",
+			ExtractedPayload: `{"loan_amount": 350000}`,
+		})
+		if err != nil {
+			t.Fatalf("unexpected error in HybridStoreExtraction: %v", err)
+		}
+		if !storeResp.Success {
+			t.Fatalf("expected HybridStoreExtraction success=true")
+		}
+
+		checkResp, err := h.HybridCheckCache(ctx, &pb.HybridCheckCacheRequest{
+			CollectionName:      "hybrid_coll",
+			Identity:            identity,
+			QueryText:           "Loan terms for borrower John Doe",
+			ConfidenceThreshold: 0.8,
+			Alpha:               0.7,
+		})
+		if err != nil {
+			t.Fatalf("unexpected error in HybridCheckCache: %v", err)
+		}
+		if !checkResp.Hit {
+			t.Fatalf("expected HybridCheckCache hit=true")
+		}
+		if checkResp.CombinedScore <= 0 {
+			t.Fatalf("expected positive CombinedScore, got %f", checkResp.CombinedScore)
+		}
+	})
 }
+
 

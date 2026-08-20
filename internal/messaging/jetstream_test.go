@@ -313,6 +313,29 @@ func (m *mockStore) GetByMetadata(ctx context.Context, collectionName string, id
 	return nil, nil
 }
 
+func (m *mockStore) EnsureCollection(ctx context.Context, collectionName string, denseDim uint64, pqCompression uint32) error {
+	return nil
+}
+
+func (m *mockStore) UpsertHybrid(ctx context.Context, collectionName string, record domain.CacheRecord) error {
+	m.mu.Lock()
+	defer m.mu.Unlock()
+	m.storedRecord = record
+	return nil
+}
+
+func (m *mockStore) HybridSearch(ctx context.Context, collectionName string, denseVector []float32, sparseVector *domain.SparseVector, identity *pb.InfrastructureIdentity, metadata map[string]any, alpha float32, limit int) ([]domain.SearchResult, error) {
+	return []domain.SearchResult{
+		{
+			Record:      domain.CacheRecord{JSONPayload: `{"cached":true}`},
+			Score:       0.99,
+			DenseScore:  0.99,
+			SparseScore: 0.95,
+		},
+	}, nil
+}
+
+
 func TestHandleMessage_BackgroundUpdatePayloadExtraction(t *testing.T) {
 	embedMock := &mockEmbedder{}
 	storeMock := &mockStore{}

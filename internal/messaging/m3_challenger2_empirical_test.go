@@ -36,6 +36,16 @@ func (d *dummyStore) CheckMetadata(ctx context.Context, collectionName string, i
 func (d *dummyStore) GetByMetadata(ctx context.Context, collectionName string, identity *pb.InfrastructureIdentity, metadata map[string]any) ([]domain.SearchResult, error) {
 	return nil, nil
 }
+func (d *dummyStore) EnsureCollection(ctx context.Context, collectionName string, denseDim uint64, pqCompression uint32) error {
+	return nil
+}
+func (d *dummyStore) UpsertHybrid(ctx context.Context, collectionName string, record domain.CacheRecord) error {
+	return nil
+}
+func (d *dummyStore) HybridSearch(ctx context.Context, collectionName string, denseVector []float32, sparseVector *domain.SparseVector, identity *pb.InfrastructureIdentity, metadata map[string]any, alpha float32, limit int) ([]domain.SearchResult, error) {
+	return nil, nil
+}
+
 
 func protoMarshalReq(req *pb.ExecuteTaskRequest) ([]byte, error) {
 	return proto.Marshal(req)

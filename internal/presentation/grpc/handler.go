@@ -245,3 +245,58 @@ func (h *SemanticCacheHandler) SemanticChunkDocument(ctx context.Context, req *p
 	return resp, nil
 }
 
+// GenerateSparseEmbedding handles the GenerateSparseEmbedding gRPC request.
+func (h *SemanticCacheHandler) GenerateSparseEmbedding(ctx context.Context, req *pb.GenerateSparseEmbeddingRequest) (*pb.GenerateSparseEmbeddingResponse, error) {
+	if err := identityparser.NewIdentityParser(req.GetIdentity()).Validate(true); err != nil {
+		logger.Error("SemanticCache", "FAIL-FAST ASSERTION FAILED [gRPC GenerateSparseEmbedding]: %v", err)
+		return nil, status.Errorf(codes.InvalidArgument, "invalid identity: %v", err)
+	}
+
+	resp, err := h.app.GenerateSparseEmbedding(ctx, req)
+	if err != nil {
+		logger.Error("SemanticCache", "ERROR: [gRPC] GenerateSparseEmbedding failed: %v", err)
+		return nil, fmt.Errorf("application layer GenerateSparseEmbedding failed: %w", err)
+	}
+
+	return resp, nil
+}
+
+// HybridCheckCache handles the HybridCheckCache gRPC request.
+func (h *SemanticCacheHandler) HybridCheckCache(ctx context.Context, req *pb.HybridCheckCacheRequest) (*pb.HybridCheckCacheResponse, error) {
+	if err := identityparser.NewIdentityParser(req.GetIdentity()).Validate(true); err != nil {
+		logger.Error("SemanticCache", "FAIL-FAST ASSERTION FAILED [gRPC HybridCheckCache]: %v", err)
+		return nil, status.Errorf(codes.InvalidArgument, "invalid identity: %v", err)
+	}
+	if strings.TrimSpace(req.CollectionName) == "" {
+		return nil, status.Error(codes.InvalidArgument, "CollectionName is required")
+	}
+
+	resp, err := h.app.HybridCheckCache(ctx, req)
+	if err != nil {
+		logger.Error("SemanticCache", "ERROR: [gRPC] HybridCheckCache failed: %v", err)
+		return nil, fmt.Errorf("application layer HybridCheckCache failed: %w", err)
+	}
+
+	return resp, nil
+}
+
+// HybridStoreExtraction handles the HybridStoreExtraction gRPC request.
+func (h *SemanticCacheHandler) HybridStoreExtraction(ctx context.Context, req *pb.HybridStoreExtractionRequest) (*pb.HybridStoreExtractionResponse, error) {
+	if err := identityparser.NewIdentityParser(req.GetIdentity()).Validate(true); err != nil {
+		logger.Error("SemanticCache", "FAIL-FAST ASSERTION FAILED [gRPC HybridStoreExtraction]: %v", err)
+		return nil, status.Errorf(codes.InvalidArgument, "invalid identity: %v", err)
+	}
+	if strings.TrimSpace(req.CollectionName) == "" {
+		return nil, status.Error(codes.InvalidArgument, "CollectionName is required")
+	}
+
+	resp, err := h.app.HybridStoreExtraction(ctx, req)
+	if err != nil {
+		logger.Error("SemanticCache", "ERROR: [gRPC] HybridStoreExtraction failed: %v", err)
+		return nil, fmt.Errorf("application layer HybridStoreExtraction failed: %w", err)
+	}
+
+	return resp, nil
+}
+
+
