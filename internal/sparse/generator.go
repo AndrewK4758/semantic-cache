@@ -1,9 +1,8 @@
 package sparse
 
 import (
-	"slices"
 	"math"
-	"sort"
+	"slices"
 	"strings"
 	"unicode"
 )

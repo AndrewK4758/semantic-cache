@@ -1,16 +1,11 @@
 package messaging
 
-import "maps"
-
-import "maps"
-
-import "github.com/AndrewK4758/shared_utils/payloadkeys"
-
 import (
 	"context"
 	"encoding/base64"
 	"encoding/json"
 	"fmt"
+	"maps"
 	"strconv"
 	"strings"
 	"time"
@@ -18,6 +13,7 @@ import (
 	pb "github.com/AndrewK4758/shared_protos"
 	"github.com/AndrewK4758/shared_utils/envutil"
 	"github.com/AndrewK4758/shared_utils/identityparser"
+	"github.com/AndrewK4758/shared_utils/payloadkeys"
 	"github.com/AndrewK4758/shared_utils/logger"
 	"github.com/AndrewK4758/shared_utils/natsutil"
 	"github.com/doc_processor/semantic_cache_service/internal/application"

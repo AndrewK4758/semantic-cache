@@ -232,7 +232,6 @@ func TestChallenger2_EmpiricalCheckCacheReturnMetadata(t *testing.T) {
 			EmbeddingLookup: anyVec,
 		}
 
-		fallbackMetaMap := map[string]any{}
 		hit, payload, conf, err := app.CheckCache(context.Background(), contract, identity)
 		if err != nil {
 			t.Fatalf("CheckCache returned error: %v", err)
