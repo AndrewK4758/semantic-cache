@@ -48,7 +48,7 @@ func (h *SemanticCacheHandler) CheckCache(ctx context.Context, req *pb.CheckCach
 		MetadataLookup:  req.MetadataLookup,
 	}
 
-	hit, payload, confidence, err := h.app.CheckCache(ctx, contract, req.Identity, nil)
+	hit, payload, confidence, err := h.app.CheckCache(ctx, contract, req.Identity)
 	if err != nil {
 		logger.Info("SemanticCache", "ERROR: [gRPC] CheckCache failed: %v", err)
 		return nil, fmt.Errorf("application layer CheckCache failed: %w", err)
@@ -160,7 +160,7 @@ func (h *SemanticCacheHandler) QueryBlankDocument(ctx context.Context, req *pb.Q
 		Confidence:      req.ConfidenceThreshold,
 	}
 
-	hit, payload, confidence, err := h.app.CheckCache(ctx, contract, req.Identity, nil)
+	hit, payload, confidence, err := h.app.CheckCache(ctx, contract, req.Identity)
 	if err != nil {
 		logger.Error("SemanticCache", "ERROR: [gRPC] QueryBlankDocument failed: %v", err)
 		return nil, fmt.Errorf("application layer CheckCache failed: %w", err)
@@ -216,7 +216,7 @@ func (h *SemanticCacheHandler) MaskEntities(ctx context.Context, req *pb.MaskEnt
 
 	logger.Info("SemanticCache", "INFO: [gRPC] Received MaskEntities request for JobId: %s, EntityCount: %d", req.GetIdentity().GetJobId(), len(req.GetEntities()))
 
-	resp, err := h.app.MaskEntities(ctx, req)
+	resp, err := h.app.MaskEntities(req)
 	if err != nil {
 		logger.Error("SemanticCache", "ERROR: [gRPC] MaskEntities failed: %v", err)
 		return nil, fmt.Errorf("application layer MaskEntities failed: %w", err)
@@ -235,7 +235,7 @@ func (h *SemanticCacheHandler) SemanticChunkDocument(ctx context.Context, req *p
 
 	logger.Info("SemanticCache", "INFO: [gRPC] Received SemanticChunkDocument request for DocType: %s, JobId: %s", req.GetDocumentType(), req.GetIdentity().GetJobId())
 
-	resp, err := h.app.SemanticChunkDocument(ctx, req)
+	resp, err := h.app.SemanticChunkDocument(req)
 	if err != nil {
 		logger.Error("SemanticCache", "ERROR: [gRPC] SemanticChunkDocument failed: %v", err)
 		return nil, fmt.Errorf("application layer SemanticChunkDocument failed: %w", err)
@@ -252,7 +252,7 @@ func (h *SemanticCacheHandler) GenerateSparseEmbedding(ctx context.Context, req 
 		return nil, status.Errorf(codes.InvalidArgument, "invalid identity: %v", err)
 	}
 
-	resp, err := h.app.GenerateSparseEmbedding(ctx, req)
+	resp, err := h.app.GenerateSparseEmbedding(req)
 	if err != nil {
 		logger.Error("SemanticCache", "ERROR: [gRPC] GenerateSparseEmbedding failed: %v", err)
 		return nil, fmt.Errorf("application layer GenerateSparseEmbedding failed: %w", err)

@@ -1,6 +1,7 @@
 package masking
 
 import (
+	"maps"
 	"sort"
 	"strings"
 	"sync"
@@ -91,9 +92,7 @@ func (r *EntitySurrogateRegistry) GetMap() map[string]string {
 	defer r.mu.RUnlock()
 
 	result := make(map[string]string, len(r.rawToSurr))
-	for k, v := range r.rawToSurr {
-		result[k] = v
-	}
+	maps.Copy(result, r.rawToSurr)
 	return result
 }
 

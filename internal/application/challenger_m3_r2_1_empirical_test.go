@@ -2,6 +2,7 @@ package application_test
 
 import (
 	"context"
+	"fmt"
 	"strings"
 	"testing"
 
@@ -17,26 +18,17 @@ import (
 
 func assertPanicMessageContains(t *testing.T, expectedSubstring string, fn func()) {
 	t.Helper()
-	didPanic := false
-	var panicVal interface{}
+	var panicVal any
 	func() {
 		defer func() {
-			if r := recover(); r != nil {
-				didPanic = true
-				panicVal = r
-			}
+			panicVal = recover()
 		}()
 		fn()
 	}()
-	if !didPanic {
+	if panicVal == nil {
 		t.Fatalf("expected panic containing %q, but code executed without panic", expectedSubstring)
 	}
-	panicStr := ""
-	if err, ok := panicVal.(error); ok {
-		panicStr = err.Error()
-	} else if str, ok := panicVal.(string); ok {
-		panicStr = str
-	}
+	panicStr := fmt.Sprint(panicVal)
 	if expectedSubstring != "" && !strings.Contains(panicStr, expectedSubstring) {
 		t.Fatalf("expected panic message containing %q, got %q", expectedSubstring, panicStr)
 	}
@@ -116,7 +108,7 @@ func TestChallenger1_Empirical_CheckCache_VectorSearch_NilMetadata_Succeeds(t *t
 		JobId:    "j-challenger",
 	}
 
-	hit, docTitle, conf, err := app.CheckCache(context.Background(), contract, identity, nil)
+	hit, docTitle, conf, err := app.CheckCache(context.Background(), contract, identity)
 	if err != nil {
 		t.Fatalf("unexpected error during CheckCache with nil metadata: %v", err)
 	}

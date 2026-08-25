@@ -1,6 +1,7 @@
 package sparse
 
 import (
+	"slices"
 	"math"
 	"sort"
 	"strings"
@@ -9,18 +10,18 @@ import (
 
 const maxSparseIndex = 1048576 // 2^20
 
-// SparseVector holds sorted indices and their non-zero weights.
-type SparseVector struct {
+// Vector SparseVector holds sorted indices and their non-zero weights.
+type Vector struct {
 	Indices []uint32  `json:"indices"`
 	Values  []float32 `json:"values"`
 }
 
-// SparseGenerator converts text into term-frequency sparse vectors.
-type SparseGenerator struct{}
+// Generator SparseGenerator converts text into term-frequency sparse vectors.
+type Generator struct{}
 
 // NewSparseGenerator creates a new sparse vector generator.
-func NewSparseGenerator() *SparseGenerator {
-	return &SparseGenerator{}
+func NewSparseGenerator() *Generator {
+	return &Generator{}
 }
 
 func fnv1aHash(s string) uint32 {
@@ -45,10 +46,10 @@ func tokenize(text string) []string {
 }
 
 // Generate builds a deterministic sparse vector from input text.
-func (g *SparseGenerator) Generate(text string) SparseVector {
+func (g *Generator) Generate(text string) Vector {
 	tokens := tokenize(text)
 	if len(tokens) == 0 {
-		return SparseVector{
+		return Vector{
 			Indices: nil,
 			Values:  nil,
 		}
@@ -65,7 +66,7 @@ func (g *SparseGenerator) Generate(text string) SparseVector {
 	}
 
 	if len(tfMap) == 0 {
-		return SparseVector{}
+		return Vector{}
 	}
 
 	// Collect unique indices and sort them in ascending order
@@ -73,9 +74,7 @@ func (g *SparseGenerator) Generate(text string) SparseVector {
 	for idx := range tfMap {
 		indices = append(indices, idx)
 	}
-	sort.Slice(indices, func(i, j int) bool {
-		return indices[i] < indices[j]
-	})
+	slices.Sort(indices)
 
 	// Compute L2 norm for TF values (log-scaled: 1 + ln(tf))
 	var normSq float64
@@ -94,7 +93,7 @@ func (g *SparseGenerator) Generate(text string) SparseVector {
 		}
 	}
 
-	return SparseVector{
+	return Vector{
 		Indices: indices,
 		Values:  scaledValues,
 	}

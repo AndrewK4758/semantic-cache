@@ -8,9 +8,9 @@ import (
 	"testing"
 	"time"
 
+	pb "github.com/AndrewK4758/shared_protos"
 	"github.com/doc_processor/semantic_cache_service/internal/application"
 	"github.com/doc_processor/semantic_cache_service/internal/domain"
-	pb "github.com/AndrewK4758/shared_protos"
 	"google.golang.org/protobuf/types/known/structpb"
 )
 
@@ -96,7 +96,6 @@ func (m *concurrentMockVectorStore) HybridSearch(ctx context.Context, collection
 	return m.Search(ctx, collectionName, denseVector, identity, metadata, limit)
 }
 
-
 // TestM4Challenger_HighConcurrency_MultiTenant_Isolation stress tests the semantic_cache_service application layer
 // under 100 concurrent workers across 10 distinct tenants and 5 apps.
 func TestM4Challenger_HighConcurrency_MultiTenant_Isolation(t *testing.T) {
@@ -158,7 +157,7 @@ func TestM4Challenger_HighConcurrency_MultiTenant_Isolation(t *testing.T) {
 				MetadataLookup: metaStruct,
 			}
 
-			hit, returnedTitle, _, err := app.CheckCache(ctx, contract, identity, nil)
+			hit, returnedTitle, _, err := app.CheckCache(ctx, contract, identity)
 			if err != nil {
 				errChan <- fmt.Errorf("worker %d CheckCache failed: %w", workerID, err)
 				return
@@ -210,7 +209,7 @@ func TestM4Challenger_ZeroFallback_IdentityAndInputFailures(t *testing.T) {
 					t.Errorf("Case %d: CheckCache expected fail-fast panic for invalid identity %v, got none", idx, id)
 				}
 			}()
-			_, _, _, _ = app.CheckCache(context.Background(), contract, id, nil)
+			_, _, _, _ = app.CheckCache(context.Background(), contract, id)
 		}()
 	}
 

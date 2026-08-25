@@ -1,12 +1,12 @@
 package messaging
 
-import "github.com/AndrewK4758/shared_utils/payloadkeys"
-
 import (
 	"context"
+	"fmt"
 	"testing"
 
 	pb "github.com/AndrewK4758/shared_protos"
+	"github.com/AndrewK4758/shared_utils/payloadkeys"
 	"github.com/doc_processor/semantic_cache_service/internal/application"
 	"github.com/doc_processor/semantic_cache_service/internal/domain"
 	"github.com/doc_processor/semantic_cache_service/internal/infrastructure/qdrant"
@@ -46,33 +46,23 @@ func (d *dummyStore) HybridSearch(ctx context.Context, collectionName string, de
 	return nil, nil
 }
 
-
 func protoMarshalReq(req *pb.ExecuteTaskRequest) ([]byte, error) {
 	return proto.Marshal(req)
 }
 
 func assertPanicContains(t *testing.T, expectedSubstring string, fn func()) {
 	t.Helper()
-	didPanic := false
-	var panicVal interface{}
+	var panicVal any
 	func() {
 		defer func() {
-			if r := recover(); r != nil {
-				didPanic = true
-				panicVal = r
-			}
+			panicVal = recover()
 		}()
 		fn()
 	}()
-	if !didPanic {
+	if panicVal == nil {
 		t.Fatalf("expected panic containing %q, but code executed without panic", expectedSubstring)
 	}
-	panicStr := ""
-	if err, ok := panicVal.(error); ok {
-		panicStr = err.Error()
-	} else if str, ok := panicVal.(string); ok {
-		panicStr = str
-	}
+	panicStr := fmt.Sprint(panicVal)
 	if !testing.Short() {
 		t.Logf("Caught expected panic: %v", panicStr)
 	}
@@ -108,12 +98,12 @@ func TestChallenger2_CheckCache_NilContractOrIdentity_Panics(t *testing.T) {
 	validId := &pb.InfrastructureIdentity{TenantId: "t1", AppId: "a1", JobId: "j1"}
 
 	assertPanicContains(t, "cache contract is required", func() {
-		_, _, _, _ = app.CheckCache(context.Background(), nil, validId, nil)
+		_, _, _, _ = app.CheckCache(context.Background(), nil, validId)
 	})
 
 	contract := &pb.CacheContract{CollectionName: "coll"}
 	assertPanicContains(t, "TenantId", func() {
-		_, _, _, _ = app.CheckCache(context.Background(), contract, nil, nil)
+		_, _, _, _ = app.CheckCache(context.Background(), contract, nil)
 	})
 }
 
@@ -170,8 +160,8 @@ func TestChallenger2_JetStream_MissingCacheContract_Panics(t *testing.T) {
 	app := application.NewSemanticCacheApp(&dummyEmbedder{}, &dummyStore{})
 	h := &JetStreamHandler{app: app}
 
-	payloadStruct, _ := structpb.NewStruct(map[string]interface{}{
-		payloadkeys.NodeConfigKey: map[string]interface{}{
+	payloadStruct, _ := structpb.NewStruct(map[string]any{
+		payloadkeys.NodeConfigKey: map[string]any{
 			"node_name": "SemanticCacheWorker",
 		},
 	})
@@ -195,13 +185,13 @@ func TestChallenger2_JetStream_BackgroundUpdate_MissingNodeOutput_Panics(t *test
 	h := &JetStreamHandler{app: app}
 
 	anyPayload, _ := anypb.New(wrapperspb.String("some text"))
-	cacheStruct, _ := structpb.NewStruct(map[string]interface{}{
+	cacheStruct, _ := structpb.NewStruct(map[string]any{
 		"collection_name": "test_coll",
 	})
 	_ = anyPayload
 
-	payloadStruct, _ := structpb.NewStruct(map[string]interface{}{
-		payloadkeys.NodeConfigKey: map[string]interface{}{
+	payloadStruct, _ := structpb.NewStruct(map[string]any{
+		payloadkeys.NodeConfigKey: map[string]any{
 			"node_name": "SemanticCacheWorker",
 		},
 		payloadkeys.CacheKey: cacheStruct,
@@ -215,17 +205,17 @@ func TestChallenger2_JetStream_BackgroundUpdate_MissingNodeOutput_Panics(t *test
 
 	// Inject non-empty EmbeddingLookup into cache struct via raw payload Map or proto
 	// Create cache struct with embedding lookup or inference_input_key
-	payloadStruct, _ = structpb.NewStruct(map[string]interface{}{
-		payloadkeys.NodeConfigKey: map[string]interface{}{
+	payloadStruct, _ = structpb.NewStruct(map[string]any{
+		payloadkeys.NodeConfigKey: map[string]any{
 			"node_name":           "SemanticCacheWorker",
 			"inference_input_key": "inbound_text",
 		},
-		payloadkeys.GlobalStateKey: map[string]interface{}{
-			"functional": map[string]interface{}{
+		payloadkeys.GlobalStateKey: map[string]any{
+			"functional": map[string]any{
 				"inbound_text": "Sample text for cache embedding",
 			},
 		},
-		payloadkeys.CacheKey: map[string]interface{}{
+		payloadkeys.CacheKey: map[string]any{
 			"collection_name": "test_coll",
 		},
 	})
@@ -244,20 +234,20 @@ func TestChallenger2_JetStream_BackgroundUpdate_MissingDocumentTitle_Panics(t *t
 	app := application.NewSemanticCacheApp(&dummyEmbedder{}, &dummyStore{})
 	h := &JetStreamHandler{app: app}
 
-	payloadStruct, _ := structpb.NewStruct(map[string]interface{}{
-		payloadkeys.NodeConfigKey: map[string]interface{}{
+	payloadStruct, _ := structpb.NewStruct(map[string]any{
+		payloadkeys.NodeConfigKey: map[string]any{
 			"node_name":           "SemanticCacheWorker",
 			"inference_input_key": "inbound_text",
 		},
-		payloadkeys.GlobalStateKey: map[string]interface{}{
-			"functional": map[string]interface{}{
+		payloadkeys.GlobalStateKey: map[string]any{
+			"functional": map[string]any{
 				"inbound_text": "Sample text for cache embedding",
 			},
 		},
-		payloadkeys.CacheKey: map[string]interface{}{
+		payloadkeys.CacheKey: map[string]any{
 			"collection_name": "test_coll",
 		},
-		payloadkeys.NodeOutputKey: map[string]interface{}{
+		payloadkeys.NodeOutputKey: map[string]any{
 			"other_field": "some_value",
 		},
 	})
@@ -280,8 +270,8 @@ func TestChallenger2_JetStream_ExceededMaxDeliveryAttempts_Panics(t *testing.T) 
 	app := application.NewSemanticCacheApp(&dummyEmbedder{}, &dummyStore{})
 	h := &JetStreamHandler{app: app}
 
-	payloadStruct, _ := structpb.NewStruct(map[string]interface{}{
-		payloadkeys.NodeConfigKey: map[string]interface{}{
+	payloadStruct, _ := structpb.NewStruct(map[string]any{
+		payloadkeys.NodeConfigKey: map[string]any{
 			"node_name": "SemanticCacheWorker",
 		},
 	})

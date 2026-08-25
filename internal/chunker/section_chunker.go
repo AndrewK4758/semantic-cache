@@ -115,10 +115,7 @@ func (sc *SectionChunker) ChunkDocument(doc, documentType string, identity *pb.I
 		metaHeader := fmt.Sprintf("# Document: %s | Section: %s\n**Tenant:** %s | **App:** %s\n\n",
 			documentType, sec.Title, identity.GetTenantId(), identity.GetAppId())
 		metaHeaderTokens := EstimateTokens(metaHeader)
-		effectiveMaxTokens := sc.maxTokens - metaHeaderTokens
-		if effectiveMaxTokens < 50 {
-			effectiveMaxTokens = 50
-		}
+		effectiveMaxTokens := max(sc.maxTokens - metaHeaderTokens, 50)
 
 		if sc.tableChunker.IsTable(secBody) {
 			tableSegments := sc.tableChunker.ChunkTable(secBody, effectiveMaxTokens)

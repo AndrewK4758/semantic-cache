@@ -10,7 +10,7 @@ import (
 	"google.golang.org/protobuf/types/known/structpb"
 )
 
-func createTestStruct(m map[string]interface{}) *structpb.Struct {
+func createTestStruct(m map[string]any) *structpb.Struct {
 	s, err := structpb.NewStruct(m)
 	if err != nil {
 		panic(err)
@@ -21,8 +21,8 @@ func createTestStruct(m map[string]interface{}) *structpb.Struct {
 // TestM2Challenger_SemanticCache_NodeNameStrict verifies strict node_name extraction
 func TestM2Challenger_SemanticCache_NodeNameStrict(t *testing.T) {
 	// Scenario 1: Valid node_name in node_config
-	validPayload := createTestStruct(map[string]interface{}{
-		payloadkeys.NodeConfigKey: map[string]interface{}{
+	validPayload := createTestStruct(map[string]any{
+		payloadkeys.NodeConfigKey: map[string]any{
 			"node_name": "SemanticCacheWorker",
 		},
 	})
@@ -34,8 +34,8 @@ func TestM2Challenger_SemanticCache_NodeNameStrict(t *testing.T) {
 	}
 
 	// Scenario 2: Legacy PascalCase NodeName at node_config -> Must fail fast
-	legacyPayload := createTestStruct(map[string]interface{}{
-		payloadkeys.NodeConfigKey: map[string]interface{}{
+	legacyPayload := createTestStruct(map[string]any{
+		payloadkeys.NodeConfigKey: map[string]any{
 			"NodeName": "SemanticCacheWorker",
 		},
 	})
@@ -47,7 +47,7 @@ func TestM2Challenger_SemanticCache_NodeNameStrict(t *testing.T) {
 	}
 
 	// Scenario 3: Root payload node_name -> Must fail fast
-	rootPayload := createTestStruct(map[string]interface{}{
+	rootPayload := createTestStruct(map[string]any{
 		"node_name": "SemanticCacheWorker",
 	})
 	reqRoot := &pb.ExecuteTaskRequest{Payload: rootPayload}

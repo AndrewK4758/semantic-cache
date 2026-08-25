@@ -24,7 +24,7 @@ import (
 type SemanticCacheApp struct {
 	embedder  domain.EmbeddingService
 	store     domain.VectorStore
-	sparseGen *sparse.SparseGenerator
+	sparseGen *sparse.Generator
 }
 
 // NewSemanticCacheApp creates a new application instance.
@@ -36,6 +36,22 @@ func NewSemanticCacheApp(embedder domain.EmbeddingService, store domain.VectorSt
 	}
 }
 
+
+func validateIdentity(identity *pb.InfrastructureIdentity) *pb.InfrastructureIdentity {
+	if identity == nil {
+		panic("missing required property: identity cannot be nil")
+	}
+	if strings.TrimSpace(identity.TenantId) == "" {
+		panic("missing required property: TenantId is required")
+	}
+	if strings.TrimSpace(identity.AppId) == "" {
+		panic("missing required property: AppId is required")
+	}
+	if strings.TrimSpace(identity.JobId) == "" {
+		panic("missing required property: JobId is required")
+	}
+	return identity
+}
 
 func purgeIgnoredMetadata(metaMap map[string]any) {
 	if metaMap == nil {
@@ -65,8 +81,8 @@ func extractVectorFromAny(anyVal *anypb.Any) ([]float32, error) {
 	if err := anyVal.UnmarshalTo(&val); err == nil {
 		if val.GetListValue() != nil {
 			list := val.GetListValue()
-			vec := make([]float32, 0, len(list.Values))
-			for _, v := range list.Values {
+            vec := make([]float32, 0, len(list.Values))
+            for _, v := range list.Values {
 				vec = append(vec, float32(v.GetNumberValue()))
 			}
 			return vec, nil
@@ -93,7 +109,7 @@ func extractVectorFromAny(anyVal *anypb.Any) ([]float32, error) {
 }
 
 // CheckCache processes the two-stage Check Cache use case using pb.CacheContract.
-func (a *SemanticCacheApp) CheckCache(ctx context.Context, contract *pb.CacheContract, identity *pb.InfrastructureIdentity, fallbackMetadata map[string]any) (hit bool, extractedPayload string, confidence float32, err error) {
+func (a *SemanticCacheApp) CheckCache(ctx context.Context, contract *pb.CacheContract, identity *pb.InfrastructureIdentity) (hit bool, extractedPayload string, confidence float32, err error) {
 	if contract == nil {
 		panic(fmt.Errorf("action failed for job CheckCache: cache contract is required"))
 	}
@@ -298,23 +314,11 @@ func (a *SemanticCacheApp) CheckMetadata(ctx context.Context, collectionName str
 }
 
 // MaskEntities processes natural entity surrogate masking for a document.
-func (a *SemanticCacheApp) MaskEntities(ctx context.Context, req *pb.MaskEntitiesRequest) (*pb.MaskEntitiesResponse, error) {
+func (a *SemanticCacheApp) MaskEntities(req *pb.MaskEntitiesRequest) (*pb.MaskEntitiesResponse, error) {
 	if req == nil {
 		panic(fmt.Errorf("action failed for job MaskEntities: request cannot be nil"))
 	}
-	identity := req.GetIdentity()
-	if identity == nil {
-		panic("missing required property: identity cannot be nil")
-	}
-	if strings.TrimSpace(identity.TenantId) == "" {
-		panic("missing required property: TenantId is required")
-	}
-	if strings.TrimSpace(identity.AppId) == "" {
-		panic("missing required property: AppId is required")
-	}
-	if strings.TrimSpace(identity.JobId) == "" {
-		panic("missing required property: JobId is required")
-	}
+	validateIdentity(req.GetIdentity())
 
 	masker := masking.NewEntityMasker()
 	maskedText, surrogateMap, totalCount := masker.MaskText(req.GetDocumentText(), req.GetEntities())
@@ -327,23 +331,11 @@ func (a *SemanticCacheApp) MaskEntities(ctx context.Context, req *pb.MaskEntitie
 }
 
 // SemanticChunkDocument processes section-isolated document chunking with metadata header injection and optional masking.
-func (a *SemanticCacheApp) SemanticChunkDocument(ctx context.Context, req *pb.SemanticChunkDocumentRequest) (*pb.SemanticChunkDocumentResponse, error) {
+func (a *SemanticCacheApp) SemanticChunkDocument(req *pb.SemanticChunkDocumentRequest) (*pb.SemanticChunkDocumentResponse, error) {
 	if req == nil {
 		panic(fmt.Errorf("action failed for job SemanticChunkDocument: request cannot be nil"))
 	}
-	identity := req.GetIdentity()
-	if identity == nil {
-		panic("missing required property: identity cannot be nil")
-	}
-	if strings.TrimSpace(identity.TenantId) == "" {
-		panic("missing required property: TenantId is required")
-	}
-	if strings.TrimSpace(identity.AppId) == "" {
-		panic("missing required property: AppId is required")
-	}
-	if strings.TrimSpace(identity.JobId) == "" {
-		panic("missing required property: JobId is required")
-	}
+	identity := validateIdentity(req.GetIdentity())
 
 	textToChunk := req.GetDocumentText()
 	var surrogateMap map[string]string
@@ -381,23 +373,11 @@ func (a *SemanticCacheApp) SemanticChunkDocument(ctx context.Context, req *pb.Se
 }
 
 // GenerateSparseEmbedding generates deterministic term-frequency sparse vectors.
-func (a *SemanticCacheApp) GenerateSparseEmbedding(ctx context.Context, req *pb.GenerateSparseEmbeddingRequest) (*pb.GenerateSparseEmbeddingResponse, error) {
+func (a *SemanticCacheApp) GenerateSparseEmbedding(req *pb.GenerateSparseEmbeddingRequest) (*pb.GenerateSparseEmbeddingResponse, error) {
 	if req == nil {
 		panic(fmt.Errorf("action failed for job GenerateSparseEmbedding: request cannot be nil"))
 	}
-	identity := req.GetIdentity()
-	if identity == nil {
-		panic("missing required property: identity cannot be nil")
-	}
-	if strings.TrimSpace(identity.TenantId) == "" {
-		panic("missing required property: TenantId is required")
-	}
-	if strings.TrimSpace(identity.AppId) == "" {
-		panic("missing required property: AppId is required")
-	}
-	if strings.TrimSpace(identity.JobId) == "" {
-		panic("missing required property: JobId is required")
-	}
+	validateIdentity(req.GetIdentity())
 
 	sVec := a.sparseGen.Generate(req.GetText())
 	return &pb.GenerateSparseEmbeddingResponse{
@@ -414,19 +394,7 @@ func (a *SemanticCacheApp) HybridCheckCache(ctx context.Context, req *pb.HybridC
 	if req == nil {
 		panic(fmt.Errorf("action failed for job HybridCheckCache: request cannot be nil"))
 	}
-	identity := req.GetIdentity()
-	if identity == nil {
-		panic("missing required property: identity cannot be nil")
-	}
-	if strings.TrimSpace(identity.TenantId) == "" {
-		panic("missing required property: TenantId is required")
-	}
-	if strings.TrimSpace(identity.AppId) == "" {
-		panic("missing required property: AppId is required")
-	}
-	if strings.TrimSpace(identity.JobId) == "" {
-		panic("missing required property: JobId is required")
-	}
+	identity := validateIdentity(req.GetIdentity())
 
 	denseVector := req.GetDenseVector()
 	if len(denseVector) == 0 && req.GetQueryText() != "" {
@@ -488,19 +456,7 @@ func (a *SemanticCacheApp) HybridStoreExtraction(ctx context.Context, req *pb.Hy
 	if req == nil {
 		panic(fmt.Errorf("action failed for job HybridStoreExtraction: request cannot be nil"))
 	}
-	identity := req.GetIdentity()
-	if identity == nil {
-		panic("missing required property: identity cannot be nil")
-	}
-	if strings.TrimSpace(identity.TenantId) == "" {
-		panic("missing required property: TenantId is required")
-	}
-	if strings.TrimSpace(identity.AppId) == "" {
-		panic("missing required property: AppId is required")
-	}
-	if strings.TrimSpace(identity.JobId) == "" {
-		panic("missing required property: JobId is required")
-	}
+	identity := validateIdentity(req.GetIdentity())
 
 	var metaMap map[string]any
 	if req.GetMetadata() != nil {

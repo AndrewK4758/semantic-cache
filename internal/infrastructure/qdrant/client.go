@@ -80,14 +80,31 @@ func makeKeywordCondition(key, val string) *pb.Condition {
 	}
 }
 
-// EnsureCollection provisions the Qdrant collection with named vectors, PQ, and payload indexes.
-func (c *Client) EnsureCollection(ctx context.Context, collectionName string, denseDim uint64, pqCompression uint32) error {
+func (c *Client) resolveCollection(collectionName string) string {
 	if collectionName == "" {
 		collectionName = c.defaultCollection
 	}
 	if collectionName == "" {
 		panic("collectionName is required")
 	}
+	return collectionName
+}
+
+func formatPointID(id string) *pb.PointId {
+	if len(id) >= 32 {
+		id = fmt.Sprintf("%s-%s-%s-%s-%s",
+			id[0:8], id[8:12], id[12:16], id[16:20], id[20:32])
+	}
+	return &pb.PointId{
+		PointIdOptions: &pb.PointId_Uuid{
+			Uuid: id,
+		},
+	}
+}
+
+// EnsureCollection provisions the Qdrant collection with named vectors, PQ, and payload indexes.
+func (c *Client) EnsureCollection(ctx context.Context, collectionName string, denseDim uint64, pqCompression uint32) error {
+	collectionName = c.resolveCollection(collectionName)
 	if denseDim == 0 {
 		denseDim = 3072
 	}
@@ -118,12 +135,11 @@ func (c *Client) EnsureCollection(ctx context.Context, collectionName string, de
 		},
 	}
 
-	alwaysRam := true
 	quantizationConfig := &pb.QuantizationConfig{
 		Quantization: &pb.QuantizationConfig_Product{
 			Product: &pb.ProductQuantization{
 				Compression: pb.CompressionRatio_x4,
-				AlwaysRam:   &alwaysRam,
+                Memory: pb.Memory_Cached.Enum(),
 			},
 		},
 	}
@@ -157,23 +173,8 @@ func (c *Client) EnsureCollection(ctx context.Context, collectionName string, de
 
 // UpsertHybrid upserts a CacheRecord with dual dense + sparse vectors.
 func (c *Client) UpsertHybrid(ctx context.Context, collectionName string, record domain.CacheRecord) error {
-	if collectionName == "" {
-		collectionName = c.defaultCollection
-	}
-	if collectionName == "" {
-		panic("collectionName is required")
-	}
-
-	if len(record.ID) >= 32 {
-		record.ID = fmt.Sprintf("%s-%s-%s-%s-%s",
-			record.ID[0:8], record.ID[8:12], record.ID[12:16], record.ID[16:20], record.ID[20:32])
-	}
-
-	pointId := &pb.PointId{
-		PointIdOptions: &pb.PointId_Uuid{
-			Uuid: record.ID,
-		},
-	}
+	collectionName = c.resolveCollection(collectionName)
+	pointId := formatPointID(record.ID)
 
 	payload := map[string]*pb.Value{}
 	if record.JSONPayload != "" {
@@ -232,12 +233,7 @@ func (c *Client) UpsertHybrid(ctx context.Context, collectionName string, record
 
 // HybridSearch executes convex combination search over dense and sparse named vectors.
 func (c *Client) HybridSearch(ctx context.Context, collectionName string, denseVector []float32, sparseVector *domain.SparseVector, identity *docpb.InfrastructureIdentity, metadata map[string]any, alpha float32, limit int) ([]domain.SearchResult, error) {
-	if collectionName == "" {
-		collectionName = c.defaultCollection
-	}
-	if collectionName == "" {
-		panic("collectionName is required")
-	}
+	collectionName = c.resolveCollection(collectionName)
 	if alpha <= 0 {
 		alpha = 0.7
 	}
@@ -347,12 +343,7 @@ func (c *Client) HybridSearch(ctx context.Context, collectionName string, denseV
 
 // Search implements the legacy domain.VectorStore interface.
 func (c *Client) Search(ctx context.Context, collectionName string, vector []float32, identity *docpb.InfrastructureIdentity, metadata map[string]any, limit int) ([]domain.SearchResult, error) {
-	if collectionName == "" {
-		collectionName = c.defaultCollection
-	}
-	if collectionName == "" {
-		panic("collectionName is required")
-	}
+	collectionName = c.resolveCollection(collectionName)
 
 	conditions := buildConditions(identity, metadata)
 	filter := &pb.Filter{
@@ -397,23 +388,8 @@ func (c *Client) Search(ctx context.Context, collectionName string, vector []flo
 
 // Upsert implements the legacy domain.VectorStore interface.
 func (c *Client) Upsert(ctx context.Context, collectionName string, record domain.CacheRecord) error {
-	if collectionName == "" {
-		collectionName = c.defaultCollection
-	}
-	if collectionName == "" {
-		panic("collectionName is required")
-	}
-
-	if len(record.ID) >= 32 {
-		record.ID = fmt.Sprintf("%s-%s-%s-%s-%s",
-			record.ID[0:8], record.ID[8:12], record.ID[12:16], record.ID[16:20], record.ID[20:32])
-	}
-
-	pointId := &pb.PointId{
-		PointIdOptions: &pb.PointId_Uuid{
-			Uuid: record.ID,
-		},
-	}
+	collectionName = c.resolveCollection(collectionName)
+	pointId := formatPointID(record.ID)
 
 	payload := map[string]*pb.Value{}
 	if record.JSONPayload != "" {
@@ -474,12 +450,7 @@ func (c *Client) Upsert(ctx context.Context, collectionName string, record domai
 
 // CheckMetadata implements the domain.VectorStore interface.
 func (c *Client) CheckMetadata(ctx context.Context, collectionName string, identity *docpb.InfrastructureIdentity, metadata map[string]any) (bool, error) {
-	if collectionName == "" {
-		collectionName = c.defaultCollection
-	}
-	if collectionName == "" {
-		panic("collectionName is required")
-	}
+	collectionName = c.resolveCollection(collectionName)
 
 	conditions := buildConditions(identity, metadata)
 	if len(conditions) == 0 {
@@ -520,12 +491,7 @@ func (c *Client) CheckMetadata(ctx context.Context, collectionName string, ident
 
 // GetByMetadata implements the domain.VectorStore interface.
 func (c *Client) GetByMetadata(ctx context.Context, collectionName string, identity *docpb.InfrastructureIdentity, metadata map[string]any) ([]domain.SearchResult, error) {
-	if collectionName == "" {
-		collectionName = c.defaultCollection
-	}
-	if collectionName == "" {
-		panic("collectionName is required")
-	}
+	collectionName = c.resolveCollection(collectionName)
 
 	conditions := buildConditions(identity, metadata)
 	if len(conditions) == 0 {
@@ -597,8 +563,6 @@ func parsePointData(pointId *pb.PointId, payload map[string]*pb.Value, identity 
 				recordIdentity.TenantId = v.GetStringValue()
 			case "app_id":
 				recordIdentity.AppId = v.GetStringValue()
-			case "job_id":
-				recordIdentity.JobId = v.GetStringValue()
 			}
 		} else if k != "json_payload" {
 			resultMetadata[k] = v.GetStringValue()

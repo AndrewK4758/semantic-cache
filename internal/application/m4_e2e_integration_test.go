@@ -1,14 +1,14 @@
 package application_test
 
 import (
-	"context"
-	"testing"
+    "context"
+    "testing"
 
-	"github.com/doc_processor/semantic_cache_service/internal/application"
-	"github.com/doc_processor/semantic_cache_service/internal/domain"
-	pb "github.com/AndrewK4758/shared_protos"
-	"google.golang.org/protobuf/types/known/anypb"
-	"google.golang.org/protobuf/types/known/structpb"
+    pb "github.com/AndrewK4758/shared_protos"
+    "github.com/doc_processor/semantic_cache_service/internal/application"
+    "github.com/doc_processor/semantic_cache_service/internal/domain"
+    "google.golang.org/protobuf/types/known/anypb"
+    "google.golang.org/protobuf/types/known/structpb"
 )
 
 
@@ -126,7 +126,7 @@ func TestM4_CheckCache_ReturnsDocumentTitleOnHit(t *testing.T) {
 		JobId:    "job_test_hit",
 	}
 
-	hit, docTitle, conf, err := app.CheckCache(ctx, contract, identity, nil)
+	hit, docTitle, conf, err := app.CheckCache(ctx, contract, identity)
 	if err != nil {
 		t.Fatalf("CheckCache failed: %v", err)
 	}
@@ -164,7 +164,90 @@ func TestM4_IdentityFailFast_Validation(t *testing.T) {
 					t.Errorf("%s: Expected panic for invalid identity, got none", name)
 				}
 			}()
-			_, _, _, _ = app.CheckCache(context.Background(), contract, id, nil)
+			_, _, _, _ = app.CheckCache(context.Background(), contract, id)
 		})
+	}
+}
+
+// TestM4_BackgroundUpdate_WarmupAndSubsequentCacheHit verifies that a background update
+// indexes document extraction into vector store, enabling subsequent cache lookups to succeed with a cache hit.
+func TestM4_BackgroundUpdate_WarmupAndSubsequentCacheHit(t *testing.T) {
+	ctx := context.Background()
+	var memoryStore []domain.CacheRecord
+
+	storeMock := &mockVectorStore{
+		upsertFn: func(ctx context.Context, collectionName string, record domain.CacheRecord) error {
+			memoryStore = append(memoryStore, record)
+			return nil
+		},
+		searchFn: func(ctx context.Context, collectionName string, vector []float32, identity *pb.InfrastructureIdentity, metadataFilter map[string]any, limit int) ([]domain.SearchResult, error) {
+			if len(memoryStore) == 0 {
+				return nil, nil
+			}
+			return []domain.SearchResult{
+				{
+					Record: memoryStore[0],
+					Score:  0.995,
+				},
+			}, nil
+		},
+	}
+
+	embedMock := &mockEmbeddingService{
+		generateFn: func(ctx context.Context, text string) ([]float32, error) {
+			return []float32{0.25, 0.50, 0.75}, nil
+		},
+	}
+
+	app := application.NewSemanticCacheApp(embedMock, storeMock)
+
+	identity := &pb.InfrastructureIdentity{
+		TenantId: "tenant_warmup",
+		AppId:    "app_warmup",
+		JobId:    "job_warmup_1",
+	}
+
+	contract := &pb.CacheContract{
+		CollectionName: "testing_warmup_collection",
+		Confidence:     0.975,
+	}
+
+	// Step 1: Initial CheckCache should result in a Cache Miss
+	hit, _, _, err := app.CheckCache(ctx, contract, identity)
+	if err != nil {
+		t.Fatalf("Initial CheckCache failed: %v", err)
+	}
+	if hit {
+		t.Fatalf("Expected initial CheckCache to be a miss, but got hit=true")
+	}
+
+	// Step 2: StoreExtraction simulates background update indexing after AI execution
+	metadata := map[string]any{
+		"subject_class":  "Borrower: Olivet, Order #: 76168546",
+		"document_title": "Closing Disclosure",
+		"TemplateHash":   "hash_cd_123",
+	}
+	extractedJSON := `{"OrderNumber":"76168546","DocumentType":"Closing Disclosure","TotalDue":12500.50}`
+	val, _ := structpb.NewValue("Sample Closing Disclosure text for embedding")
+	embeddingAny, _ := anypb.New(val)
+
+	err = app.StoreExtraction(ctx, contract.CollectionName, identity, metadata, extractedJSON, embeddingAny)
+	if err != nil {
+		t.Fatalf("StoreExtraction failed: %v", err)
+	}
+
+	// Step 3: Second CheckCache on identical/similar document should produce a Cache Hit
+	hit2, payload2, conf2, err2 := app.CheckCache(ctx, contract, identity)
+	if err2 != nil {
+		t.Fatalf("Second CheckCache failed: %v", err2)
+	}
+	if !hit2 {
+		t.Fatalf("Expected second CheckCache to be a hit, but got hit=false")
+	}
+	if conf2 < 0.975 {
+		t.Fatalf("Expected confidence >= 0.975, got %.4f", conf2)
+	}
+	if payload2 != extractedJSON {
+		t.Fatalf("Expected payload '%s', got '%s'", extractedJSON, payload2)
 	}
 }

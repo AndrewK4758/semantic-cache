@@ -260,7 +260,7 @@ func TestSemanticCacheApp_CheckCache(t *testing.T) {
 				JobId:    "job_789",
 			}
 
-			hit, payload, conf, err := app.CheckCache(context.Background(), contract, identity, nil)
+			hit, payload, conf, err := app.CheckCache(context.Background(), contract, identity)
 
 			if (err != nil) != tt.expectError {
 				t.Fatalf("expected error: %v, got: %v", tt.expectError, err)
@@ -330,7 +330,7 @@ func TestCheckCache_EmptyMetadataWithNonNilIdentity_SkipsStage1(t *testing.T) {
 		JobId:    "job_789",
 	}
 
-	hit, payload, conf, err := app.CheckCache(context.Background(), contract, identity, nil)
+	hit, payload, conf, err := app.CheckCache(context.Background(), contract, identity)
 	if err != nil {
 		t.Fatalf("unexpected error: %v", err)
 	}
@@ -508,7 +508,7 @@ func TestSemanticCacheApp_CheckCache_NilContract(t *testing.T) {
 			t.Fatalf("expected panic when contract is nil, got none")
 		}
 	}()
-	app.CheckCache(context.Background(), nil, identity, nil)
+	app.CheckCache(context.Background(), nil, identity)
 }
 
 func TestSemanticCacheApp_CheckCache_PrecomputedVector(t *testing.T) {
@@ -549,7 +549,7 @@ func TestSemanticCacheApp_CheckCache_PrecomputedVector(t *testing.T) {
 		JobId:    "j1",
 	}
 
-	hit, payload, conf, err := app.CheckCache(context.Background(), contract, identity, nil)
+	hit, payload, conf, err := app.CheckCache(context.Background(), contract, identity)
 	if err != nil {
 		t.Fatalf("unexpected error: %v", err)
 	}
@@ -604,10 +604,10 @@ func TestSemanticCacheApp_GenerateSparseEmbedding(t *testing.T) {
 	app := application.NewSemanticCacheApp(&mockEmbeddingService{}, &mockVectorStore{})
 	identity := &pb.InfrastructureIdentity{TenantId: "t1", AppId: "a1", JobId: "j1"}
 
-	resp, err := app.GenerateSparseEmbedding(context.Background(), &pb.GenerateSparseEmbeddingRequest{
-		Identity: identity,
-		Text:     "Closing disclosure for borrower John Doe",
-	})
+	resp, err := app.GenerateSparseEmbedding(&pb.GenerateSparseEmbeddingRequest{
+        Identity: identity,
+        Text:     "Closing disclosure for borrower John Doe",
+    })
 	if err != nil {
 		t.Fatalf("unexpected error: %v", err)
 	}

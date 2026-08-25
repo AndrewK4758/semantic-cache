@@ -185,9 +185,9 @@ func TestChallenger_NilMetadataInMsg(t *testing.T) {
 		app: app,
 	}
 
-	payload, _ := structpb.NewStruct(map[string]interface{}{
-		payloadkeys.NodeConfigKey: map[string]interface{}{"node_name": "TestNode"},
-		payloadkeys.CacheKey: map[string]interface{}{
+	payload, _ := structpb.NewStruct(map[string]any{
+		payloadkeys.NodeConfigKey: map[string]any{"node_name": "TestNode"},
+		payloadkeys.CacheKey: map[string]any{
 			"collection_name": "test_coll",
 		},
 	})
@@ -230,9 +230,9 @@ func TestChallenger_CheckCacheErrorOverwrittenBySendReply(t *testing.T) {
 		app: app,
 	}
 
-	payload, _ := structpb.NewStruct(map[string]interface{}{
-		payloadkeys.NodeConfigKey: map[string]interface{}{"node_name": "TestNode"},
-		payloadkeys.CacheKey: map[string]interface{}{
+	payload, _ := structpb.NewStruct(map[string]any{
+		payloadkeys.NodeConfigKey: map[string]any{"node_name": "TestNode"},
+		payloadkeys.CacheKey: map[string]any{
 			"collection_name": "test_coll",
 		},
 	})
@@ -285,9 +285,9 @@ func TestChallenger_ExtremeConcurrencyStress(t *testing.T) {
 		app: app,
 	}
 
-	payload1, _ := structpb.NewStruct(map[string]interface{}{
-		payloadkeys.NodeConfigKey: map[string]interface{}{"node_name": "TestNode"},
-		payloadkeys.CacheKey: map[string]interface{}{
+	payload1, _ := structpb.NewStruct(map[string]any{
+		payloadkeys.NodeConfigKey: map[string]any{"node_name": "TestNode"},
+		payloadkeys.CacheKey: map[string]any{
 			"collection_name": "coll1",
 			"confidence":      0.8,
 		},
@@ -299,13 +299,13 @@ func TestChallenger_ExtremeConcurrencyStress(t *testing.T) {
 	}
 	data1, _ := proto.Marshal(req1)
 
-	payload2, _ := structpb.NewStruct(map[string]interface{}{
-		payloadkeys.NodeConfigKey: map[string]interface{}{"node_name": "TestNode2"},
-		payloadkeys.CacheKey: map[string]interface{}{
+	payload2, _ := structpb.NewStruct(map[string]any{
+		payloadkeys.NodeConfigKey: map[string]any{"node_name": "TestNode2"},
+		payloadkeys.CacheKey: map[string]any{
 			"collection_name": "coll2",
 		},
-		payloadkeys.NodeOutputKey: map[string]interface{}{"data": "value"},
-		payloadkeys.MetadataKey: map[string]interface{}{
+		payloadkeys.NodeOutputKey: map[string]any{"data": "value"},
+		payloadkeys.MetadataKey: map[string]any{
 			"subject_class":  "test",
 			"TemplateHash":   "hash",
 			"document_title": "title",
@@ -321,7 +321,7 @@ func TestChallenger_ExtremeConcurrencyStress(t *testing.T) {
 	var wg sync.WaitGroup
 	concurrency := 100
 
-	for i := 0; i < concurrency; i++ {
+	for i := range concurrency {
 		wg.Add(2)
 		go func(idx int) {
 			defer wg.Done()
@@ -376,9 +376,9 @@ func TestChallenger_BackgroundUpdateCorruptNodeOutput(t *testing.T) {
 	app := application.NewSemanticCacheApp(embedder, store)
 	h := &JetStreamHandler{app: app}
 
-	payload, _ := structpb.NewStruct(map[string]interface{}{
-		payloadkeys.NodeConfigKey: map[string]interface{}{"node_name": "TestNode"},
-		payloadkeys.CacheKey: map[string]interface{}{
+	payload, _ := structpb.NewStruct(map[string]any{
+		payloadkeys.NodeConfigKey: map[string]any{"node_name": "TestNode"},
+		payloadkeys.CacheKey: map[string]any{
 			"collection_name": "coll1",
 		},
 	})
@@ -417,7 +417,7 @@ func TestChallenger_StoreExtractionWithPrecomputedVector(t *testing.T) {
 	app := application.NewSemanticCacheApp(embedder, store)
 
 	// Create list value any for vector [0.5, 0.6, 0.7]
-	listVal, _ := structpb.NewList([]interface{}{0.5, 0.6, 0.7})
+	listVal, _ := structpb.NewList([]any{0.5, 0.6, 0.7})
 	anyVec, _ := anypb.New(listVal)
 
 	err := app.StoreExtraction(context.Background(), "test_coll", &pb.InfrastructureIdentity{

@@ -181,7 +181,7 @@ func TestGRPCHandler_ErrorHandling(t *testing.T) {
 	})
 
 	t.Run("StoreExtraction error returns success false and error", func(t *testing.T) {
-		st, _ := structpb.NewStruct(map[string]interface{}{
+		st, _ := structpb.NewStruct(map[string]any{
 			"subject_class":  "test",
 			"TemplateHash":   "hash",
 			"document_title": "title",

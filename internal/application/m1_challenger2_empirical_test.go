@@ -181,7 +181,7 @@ func TestChallenger2_EmpiricalCheckCacheReturnMetadata(t *testing.T) {
 			MetadataLookup: metaStruct,
 		}
 
-		hit, payload, conf, err := app.CheckCache(context.Background(), contract, identity, nil)
+		hit, payload, conf, err := app.CheckCache(context.Background(), contract, identity)
 		if err != nil {
 			t.Fatalf("CheckCache returned error: %v", err)
 		}
@@ -233,7 +233,7 @@ func TestChallenger2_EmpiricalCheckCacheReturnMetadata(t *testing.T) {
 		}
 
 		fallbackMetaMap := map[string]any{}
-		hit, payload, conf, err := app.CheckCache(context.Background(), contract, identity, fallbackMetaMap)
+		hit, payload, conf, err := app.CheckCache(context.Background(), contract, identity)
 		if err != nil {
 			t.Fatalf("CheckCache returned error: %v", err)
 		}

@@ -87,7 +87,7 @@ func TestHitStr(t *testing.T) {
 func TestHandleMessage_MaxDeliveryAttemptsExceeded_TerminatesMessage(t *testing.T) {
 	handler := &JetStreamHandler{}
 
-	payload, _ := structpb.NewStruct(map[string]interface{}{
+	payload, _ := structpb.NewStruct(map[string]any{
 		"graph_id":        "graph-max-retries-101",
 		"initial_node_id": "node-init-202",
 	})
@@ -118,10 +118,10 @@ func TestHandleMessage_MaxDeliveryAttemptsExceeded_TerminatesMessage(t *testing.
 func TestHandleMessage_MissingNodeConfig_TermsMessage(t *testing.T) {
 	handler := &JetStreamHandler{}
 
-	payload, _ := structpb.NewStruct(map[string]interface{}{
+	payload, _ := structpb.NewStruct(map[string]any{
 		"graph_id":        "graph-missing-cfg",
 		"initial_node_id": "node-missing-cfg",
-		payloadkeys.CacheKey: map[string]interface{}{
+		payloadkeys.CacheKey: map[string]any{
 			"collection_name": "test_coll",
 		},
 	})
@@ -149,14 +149,14 @@ func TestHandleMessage_MissingNodeConfig_TermsMessage(t *testing.T) {
 	}
 }
 
-func TestHandleMessage_UnknownSubject_AcksMessage(t *testing.T) {
+func TestHandleMessage_UnknownSubject_PanicsFailFast(t *testing.T) {
 	handler := &JetStreamHandler{}
 
-	payload, _ := structpb.NewStruct(map[string]interface{}{
+	payload, _ := structpb.NewStruct(map[string]any{
 		"graph_id":        "graph-unknown-subj",
 		"initial_node_id": "node-unknown-subj",
-		payloadkeys.NodeConfigKey: map[string]interface{}{"node_name": "Test Node"},
-		payloadkeys.CacheKey: map[string]interface{}{
+		payloadkeys.NodeConfigKey: map[string]any{"node_name": "Test Node"},
+		payloadkeys.CacheKey: map[string]any{
 			"collection_name": "test_coll",
 		},
 	})
@@ -180,18 +180,18 @@ func TestHandleMessage_UnknownSubject_AcksMessage(t *testing.T) {
 
 	handler.handleMessage(msg)
 
-	if !msg.acked {
-		t.Fatalf("Expected msg.Ack() to be called for unknown subject, but it was not")
+	if !msg.nacked {
+		t.Fatalf("Expected msg to be nacked due to fail-fast panic on unknown subject, but got none")
 	}
 }
 
 func TestHandleMessage_MissingCacheContract_TermsMessage(t *testing.T) {
 	handler := &JetStreamHandler{}
 
-	payload, _ := structpb.NewStruct(map[string]interface{}{
+	payload, _ := structpb.NewStruct(map[string]any{
 		"graph_id":        "graph-missing-cache",
 		"initial_node_id": "node-missing-cache",
-		payloadkeys.NodeConfigKey: map[string]interface{}{"node_name": "Test Node"},
+		payloadkeys.NodeConfigKey: map[string]any{"node_name": "Test Node"},
 	})
 	req := &pb.ExecuteTaskRequest{
 		TaskSubject: "worker.cache.lookup",
@@ -224,11 +224,11 @@ func TestHandleMessage_GraphIdAndInitialNodeIdExtraction(t *testing.T) {
 	app := application.NewSemanticCacheApp(embedMock, storeMock)
 	handler := &JetStreamHandler{app: app}
 
-	payload, _ := structpb.NewStruct(map[string]interface{}{
+	payload, _ := structpb.NewStruct(map[string]any{
 		"graph_id":        "graph-audit-999",
 		"initial_node_id": "node-start-111",
-		payloadkeys.NodeConfigKey: map[string]interface{}{"node_name": "Cache Audit Node"},
-		payloadkeys.CacheKey: map[string]interface{}{
+		payloadkeys.NodeConfigKey: map[string]any{"node_name": "Cache Audit Node"},
+		payloadkeys.CacheKey: map[string]any{
 			"collection_name": "test_coll",
 		},
 	})
@@ -343,17 +343,17 @@ func TestHandleMessage_BackgroundUpdatePayloadExtraction(t *testing.T) {
 	handler := &JetStreamHandler{app: app}
 
 	t.Run("Extract payload from NodeOutput", func(t *testing.T) {
-		payload, _ := structpb.NewStruct(map[string]interface{}{
+		payload, _ := structpb.NewStruct(map[string]any{
 			"graph_id":        "graph-bg-1",
 			"initial_node_id": "node-bg-1",
-			payloadkeys.NodeConfigKey: map[string]interface{}{"node_name": "test"},
-			payloadkeys.CacheKey: map[string]interface{}{
+			payloadkeys.NodeConfigKey: map[string]any{"node_name": "test"},
+			payloadkeys.CacheKey: map[string]any{
 				"collection_name": "test_coll",
 			},
-			payloadkeys.NodeOutputKey: map[string]interface{}{
+			payloadkeys.NodeOutputKey: map[string]any{
 				"extracted_key": "val1",
 			},
-			payloadkeys.MetadataKey: map[string]interface{}{
+			payloadkeys.MetadataKey: map[string]any{
 				"subject_class":  "test",
 				"TemplateHash":   "hash",
 				"document_title": "title",
@@ -374,12 +374,77 @@ func TestHandleMessage_BackgroundUpdatePayloadExtraction(t *testing.T) {
 		}
 	})
 
+	t.Run("Fail fast on legacy underscore subject", func(t *testing.T) {
+		payload, _ := structpb.NewStruct(map[string]any{
+			"graph_id":        "graph-bg-legacy-1",
+			"initial_node_id": "node-bg-legacy-1",
+			payloadkeys.NodeConfigKey: map[string]any{"node_name": "test"},
+			payloadkeys.CacheKey: map[string]any{
+				"collection_name": "test_coll",
+			},
+			payloadkeys.NodeOutputKey: map[string]any{
+				"extracted_key": "val_legacy",
+			},
+			payloadkeys.MetadataKey: map[string]any{
+				"subject_class":  "test",
+				"TemplateHash":   "hash",
+				"document_title": "title",
+			},
+		})
+		req := &pb.ExecuteTaskRequest{
+			TaskSubject: "worker.cache.background_update",
+			Identity:    &pb.InfrastructureIdentity{JobId: "job-legacy-1", TenantId: "t1", AppId: "a1"},
+			Payload:     payload,
+		}
+		data, _ := proto.Marshal(req)
+		msg := &mockCacheMsg{data: data, subject: "worker.cache.background_update", numDeliv: 1}
+
+		handler.handleMessage(msg)
+
+		if !msg.nacked {
+			t.Fatal("expected msg with legacy underscore subject to panic fail-fast and be nacked")
+		}
+	})
+
+	t.Run("Extract payload from tokenized subject suffixes", func(t *testing.T) {
+		subj := "worker.cache.background.update.CNJ.Artemis"
+		payload, _ := structpb.NewStruct(map[string]any{
+			"graph_id":        "graph-bg-tok",
+			"initial_node_id": "node-bg-tok",
+			payloadkeys.NodeConfigKey: map[string]any{"node_name": "test"},
+			payloadkeys.CacheKey: map[string]any{
+				"collection_name": "test_coll",
+			},
+			payloadkeys.NodeOutputKey: map[string]any{
+				"extracted_key": "val_tokenized",
+			},
+			payloadkeys.MetadataKey: map[string]any{
+				"subject_class":  "test",
+				"TemplateHash":   "hash",
+				"document_title": "title",
+			},
+		})
+		req := &pb.ExecuteTaskRequest{
+			TaskSubject: subj,
+			Identity:    &pb.InfrastructureIdentity{JobId: "job-tok", TenantId: "t1", AppId: "a1"},
+			Payload:     payload,
+		}
+		data, _ := proto.Marshal(req)
+		msg := &mockCacheMsg{data: data, subject: subj, numDeliv: 1}
+
+		handler.handleMessage(msg)
+
+		if !msg.acked {
+			t.Fatalf("expected msg with subject '%s' to be acked", subj)
+		}
+	})
+
 	t.Run("Fails fast when NodeOutput is empty", func(t *testing.T) {
-		payload, _ := structpb.NewStruct(map[string]interface{}{
+		payload, _ := structpb.NewStruct(map[string]any{
 			"graph_id":        "graph-bg-2",
 			"initial_node_id": "node-bg-2",
-			payloadkeys.NodeConfigKey: map[string]interface{}{"node_name": "test"},
-			payloadkeys.CacheKey: map[string]interface{}{
+			payloadkeys.NodeConfigKey: map[string]any{"node_name": "test"},
+			payloadkeys.CacheKey: map[string]any{
 				"collection_name": "test_coll",
 			},
 		})
@@ -404,18 +469,18 @@ func TestHandleMessage_ConcurrentStressTest(t *testing.T) {
 	app := application.NewSemanticCacheApp(embedMock, storeMock)
 	handler := &JetStreamHandler{app: app}
 
-	payload, _ := structpb.NewStruct(map[string]interface{}{
+	payload, _ := structpb.NewStruct(map[string]any{
 		"graph_id":        "graph-stress-99",
 		"initial_node_id": "node-stress-99",
-		payloadkeys.NodeConfigKey: map[string]interface{}{"node_name": "stress_node"},
-		payloadkeys.CacheKey: map[string]interface{}{
+		payloadkeys.NodeConfigKey: map[string]any{"node_name": "stress_node"},
+		payloadkeys.CacheKey: map[string]any{
 			"collection_name": "stress_coll",
 			"confidence":      0.8,
 		},
-		payloadkeys.NodeOutputKey: map[string]interface{}{
+		payloadkeys.NodeOutputKey: map[string]any{
 			"stress": true,
 		},
-		payloadkeys.MetadataKey: map[string]interface{}{
+		payloadkeys.MetadataKey: map[string]any{
 			"subject_class":  "test",
 			"TemplateHash":   "hash",
 			"document_title": "title",
@@ -431,7 +496,7 @@ func TestHandleMessage_ConcurrentStressTest(t *testing.T) {
 	const goroutines = 50
 	done := make(chan bool, goroutines)
 
-	for i := 0; i < goroutines; i++ {
+	for i := range goroutines {
 		go func(id int) {
 			subj := "worker.cache.lookup"
 			if id%2 == 0 {
@@ -446,15 +511,8 @@ func TestHandleMessage_ConcurrentStressTest(t *testing.T) {
 		}(i)
 	}
 
-	for i := 0; i < goroutines; i++ {
+	for range goroutines {
 		<-done
 	}
 }
 
-func unmarshalStruct(jsonStr string) *structpb.Struct {
-	var s structpb.Struct
-	if err := protojson.Unmarshal([]byte(jsonStr), &s); err != nil {
-		panic(err)
-	}
-	return &s
-}

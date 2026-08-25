@@ -1,5 +1,9 @@
 package messaging
 
+import "maps"
+
+import "maps"
+
 import "github.com/AndrewK4758/shared_utils/payloadkeys"
 
 import (
@@ -72,7 +76,9 @@ func (h *JetStreamHandler) StartConsumers(ctx context.Context) error {
 			Durable:        "semantic_cache_service_consumer",
 			AckPolicy:      jetstream.AckExplicitPolicy,
 			AckWait:        60 * time.Second,
-			FilterSubjects: []string{"worker.cache.lookup", "worker.cache.lookup.>", "worker.cache.background.update", "worker.cache.background.update.>"},
+			FilterSubjects: []string{
+				"worker.cache.>",
+			},
 			MaxAckPending:  maxAckPending,
 			BackOff: []time.Duration{
 				1 * time.Second,
@@ -261,19 +267,15 @@ func (h *JetStreamHandler) handleMessage(msg jetstream.Msg) {
 	if md, ok := payloadMap[payloadkeys.MetadataKey].(map[string]any); ok {
 		// Unwrap "values" if it's the strongly-typed MetadataPayload
 		if valuesWrapper, hasValues := md["values"].(map[string]any); hasValues {
-			for k, v := range valuesWrapper {
-				metadata[k] = v
-			}
+			maps.Copy(metadata, valuesWrapper)
 		} else {
-			for k, v := range md {
-				metadata[k] = v
-			}
+			maps.Copy(metadata, md)
 		}
 	}
 
 	if strings.HasPrefix(subject, "worker.cache.lookup") {
 		// Cache Lookup
-		hit, payload, confidence, err := h.app.CheckCache(ctx, cacheConfig, req.Identity, metadata)
+		hit, payload, confidence, err := h.app.CheckCache(ctx, cacheConfig, req.Identity)
 		if err != nil {
 			logger.Error("SemanticCache", "CheckCache failed: %v", err)
 			if replyErr := h.sendErrorReply(ctx, msg, fmt.Sprintf("CheckCache failed: %v", err), req.Identity); replyErr != nil {
@@ -306,27 +308,7 @@ func (h *JetStreamHandler) handleMessage(msg jetstream.Msg) {
 			"confidence":          confidence,
 			"matchedPayload":      matchedPayloadObj,
 		}
-		resultBytes, _ := json.Marshal(resultMap)
-
-		if err := h.sendSuccessReply(ctx, msg, string(resultBytes), req.Identity); err != nil {
-			logger.Error("SemanticCache", "Failed to send success reply: %v", err)
-			msg.NakWithDelay(5 * time.Second)
-			return
-		}
-		durationMs := time.Since(startTime).Milliseconds()
-		msg.Ack()
-		natsutil.LogJetStreamEvent(natsutil.JetStreamLogEvent{
-			Component:  "SemanticCache",
-			Event:      "ACKNOWLEDGED",
-			Stream:     "WORKERS",
-			Subject:    subject,
-			Consumer:   "semantic_cache_service_consumer",
-			TenantID:   t,
-			AppID:      a,
-			JobID:      j,
-			Attempt:    attempt,
-			DurationMs: durationMs,
-		})
+		h.acknowledgeSuccess(ctx, msg, resultMap, req.Identity, subject, attempt, startTime)
 
 	} else if strings.HasPrefix(subject, "worker.cache.background.update") {
 		nodeOutputRaw := payloadMap[payloadkeys.NodeOutputKey]
@@ -368,44 +350,35 @@ func (h *JetStreamHandler) handleMessage(msg jetstream.Msg) {
 		resultMap := map[string]any{
 			"semanticCacheResult": "updated",
 		}
-		resultBytes, _ := json.Marshal(resultMap)
-
-		if err := h.sendSuccessReply(ctx, msg, string(resultBytes), req.Identity); err != nil {
-			logger.Error("SemanticCache", "Failed to send success reply: %v", err)
-			msg.NakWithDelay(5 * time.Second)
-			return
-		}
-		durationMs := time.Since(startTime).Milliseconds()
-		msg.Ack()
-		natsutil.LogJetStreamEvent(natsutil.JetStreamLogEvent{
-			Component:  "SemanticCache",
-			Event:      "ACKNOWLEDGED",
-			Stream:     "WORKERS",
-			Subject:    subject,
-			Consumer:   "semantic_cache_service_consumer",
-			TenantID:   t,
-			AppID:      a,
-			JobID:      j,
-			Attempt:    attempt,
-			DurationMs: durationMs,
-		})
+		h.acknowledgeSuccess(ctx, msg, resultMap, req.Identity, subject, attempt, startTime)
 	} else {
-		logger.Info("SemanticCache", "WARN: Unknown cache request subject: %s", subject)
-		durationMs := time.Since(startTime).Milliseconds()
-		msg.Ack()
-		natsutil.LogJetStreamEvent(natsutil.JetStreamLogEvent{
-			Component:  "SemanticCache",
-			Event:      "ACKNOWLEDGED",
-			Stream:     "WORKERS",
-			Subject:    subject,
-			Consumer:   "semantic_cache_service_consumer",
-			TenantID:   t,
-			AppID:      a,
-			JobID:      j,
-			Attempt:    attempt,
-			DurationMs: durationMs,
-		})
+		panic(fmt.Errorf("action failed for job %s: unrecognized cache subject %s", j, subject))
 	}
+}
+
+func (h *JetStreamHandler) acknowledgeSuccess(ctx context.Context, msg jetstream.Msg, resultMap map[string]any, reqIdentity *pb.InfrastructureIdentity, subject string, attempt uint64, startTime time.Time) {
+	resultBytes, _ := json.Marshal(resultMap)
+
+	if err := h.sendSuccessReply(ctx, msg, string(resultBytes), reqIdentity); err != nil {
+		logger.Error("SemanticCache", "Failed to send success reply: %v", err)
+		msg.NakWithDelay(5 * time.Second)
+		return
+	}
+	durationMs := time.Since(startTime).Milliseconds()
+	msg.Ack()
+	t, a, j := natsutil.ExtractIdentity(reqIdentity)
+	natsutil.LogJetStreamEvent(natsutil.JetStreamLogEvent{
+		Component:  "SemanticCache",
+		Event:      "ACKNOWLEDGED",
+		Stream:     "WORKERS",
+		Subject:    subject,
+		Consumer:   "semantic_cache_service_consumer",
+		TenantID:   t,
+		AppID:      a,
+		JobID:      j,
+		Attempt:    attempt,
+		DurationMs: durationMs,
+	})
 }
 
 func hitStr(hit bool) string {
