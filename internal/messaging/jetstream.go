@@ -252,7 +252,18 @@ func (h *JetStreamHandler) handleMessage(msg jetstream.Msg) {
 	}
 
 	if cacheConfig == nil {
-		panic(fmt.Errorf("action failed for job %s: missing cache config in payload", j))
+		if strings.HasPrefix(subject, "worker.cache.background.update") {
+			logger.Warn("SemanticCache", "Job %s: missing cache config in payload for background update, defaulting to 'incoming_email_templates'", j)
+			cacheConfig = &pb.CacheContract{
+				CollectionName: "incoming_email_templates",
+				Confidence:     0.975,
+			}
+		} else {
+			panic(fmt.Errorf("action failed for job %s: missing cache config in payload", j))
+		}
+	}
+	if cacheConfig.CollectionName == "" {
+		cacheConfig.CollectionName = "incoming_email_templates"
 	}
 
 	if nodeName == "" {
@@ -308,6 +319,11 @@ func (h *JetStreamHandler) handleMessage(msg jetstream.Msg) {
 
 	} else if strings.HasPrefix(subject, "worker.cache.background.update") {
 		nodeOutputRaw := payloadMap[payloadkeys.NodeOutputKey]
+		if nodeOutputRaw == nil {
+			if gs, ok := payloadMap[payloadkeys.GlobalStateKey].(map[string]any); ok {
+				nodeOutputRaw = gs["functional"]
+			}
+		}
 		if nodeOutputRaw == nil {
 			panic(fmt.Errorf("action failed for job %s: missing required property node_output in payload", req.Identity.JobId))
 		}
