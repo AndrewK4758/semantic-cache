@@ -114,7 +114,7 @@ func (m *EntityMasker) MaskText(text string, entities []*pb.ExtractedEntity) (st
 		return text, m.registry.GetMap(), 0
 	}
 
-	// 1. First register surrogates in sequential input order
+	// Register surrogates in input order so sequential labels stay deterministic before sorting by length.
 	for _, entity := range entities {
 		rawVal := strings.TrimSpace(entity.GetRawValue())
 		if len(rawVal) > 0 {
@@ -122,7 +122,7 @@ func (m *EntityMasker) MaskText(text string, entities []*pb.ExtractedEntity) (st
 		}
 	}
 
-	// 2. Sort unique entries by raw_value length descending to prioritize longest string matches during replacement
+	// Replace longest values first so substrings (e.g., "John Doe") don't clobber superstrings ("John Doe Jr.").
 	sortedEntities := make([]*pb.ExtractedEntity, len(entities))
 	copy(sortedEntities, entities)
 	sort.Slice(sortedEntities, func(i, j int) bool {

@@ -34,7 +34,6 @@ func TestTableChunker_RowAtomicSplittingAndHeaderRepetition(t *testing.T) {
 		assert.Equal(t, "| Fee Description | Paid By Borrower | Paid By Seller |", lines[0], "Chunk %d must start with column header", i)
 		assert.Equal(t, "|---|---|---|", lines[1], "Chunk %d must have delimiter on second line", i)
 
-		// Assert no row is truncated
 		for _, line := range lines {
 			assert.True(t, strings.HasPrefix(line, "|") && strings.HasSuffix(line, "|"), "Table rows must be intact: %s", line)
 		}
@@ -42,7 +41,7 @@ func TestTableChunker_RowAtomicSplittingAndHeaderRepetition(t *testing.T) {
 }
 
 func TestSectionChunker_SectionIsolationAndOverlap(t *testing.T) {
-	sc := chunker.NewSectionChunker(100, 20) // max 100 tokens, 20 overlap
+	sc := chunker.NewSectionChunker(100, 20)
 
 	doc := `# Document Details
 This is the overview of the loan closing packet. Everything is verified.
@@ -66,7 +65,6 @@ Loan amount is $450,000.00 with interest rate at 6.25% fixed for 30 years. The m
 
 	require.NotEmpty(t, chunks)
 
-	// Ensure each chunk has the injected parent metadata header
 	for _, chunk := range chunks {
 		assert.Contains(t, chunk.GetContent(), "# Document: ClosingDisclosure | Section:")
 		assert.Contains(t, chunk.GetContent(), "**Tenant:** tenant-100 | **App:** app-mployee")

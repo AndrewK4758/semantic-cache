@@ -109,13 +109,11 @@ func (c *Client) EnsureCollection(ctx context.Context, collectionName string, de
 		denseDim = 3072
 	}
 
-	// 1. Check if collection already exists
 	_, err := c.collectionsClient.Get(ctx, &pb.GetCollectionInfoRequest{CollectionName: collectionName})
 	if err == nil {
-		return nil // Collection already exists
+		return nil
 	}
 
-	// 2. Configure Named Vectors: dense (Cosine) + sparse (Dot)
 	vectorsConfig := &pb.VectorsConfig{
 		Config: &pb.VectorsConfig_ParamsMap{
 			ParamsMap: &pb.VectorParamsMap{
@@ -156,7 +154,6 @@ func (c *Client) EnsureCollection(ctx context.Context, collectionName string, de
 		return fmt.Errorf("failed to create collection %s: %w", collectionName, createErr)
 	}
 
-	// 3. Register Keyword Payload Schema Indexes
 	indexedFields := []string{"tenant_id", "app_id", "doc_type", "section_title"}
 	fieldType := pb.FieldType_FieldTypeKeyword
 	for _, field := range indexedFields {
@@ -254,7 +251,6 @@ func (c *Client) HybridSearch(ctx context.Context, collectionName string, denseV
 	merged := make(map[string]*matchInfo)
 
 	denseName := "dense"
-	// 1. Search Dense Vector
 	if len(denseVector) > 0 {
 		denseReq := &pb.SearchPoints{
 			CollectionName: collectionName,
@@ -285,7 +281,6 @@ func (c *Client) HybridSearch(ctx context.Context, collectionName string, denseV
 	}
 
 	sparseName := "sparse"
-	// 2. Search Sparse Vector
 	if sparseVector != nil && len(sparseVector.Indices) > 0 {
 		sparseReq := &pb.SearchPoints{
 			CollectionName: collectionName,
@@ -319,7 +314,6 @@ func (c *Client) HybridSearch(ctx context.Context, collectionName string, denseV
 		}
 	}
 
-	// 3. Compute Convex Linear Score and Sort
 	var results []domain.SearchResult
 	for _, info := range merged {
 		combinedScore := (alpha * info.denseScore) + ((1.0 - alpha) * info.sparseScore)

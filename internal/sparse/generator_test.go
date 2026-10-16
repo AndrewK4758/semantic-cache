@@ -19,17 +19,13 @@ func TestSparseGenerator_DeterministicAndSorted(t *testing.T) {
 	require.NotEmpty(t, vec1.Indices)
 	require.Equal(t, len(vec1.Indices), len(vec1.Values))
 
-	// Determinism
 	assert.Equal(t, vec1.Indices, vec2.Indices)
 	assert.Equal(t, vec1.Values, vec2.Values)
 
-	// Invariant: Indices MUST be strictly sorted in ascending order with no duplicates
 	for i := 1; i < len(vec1.Indices); i++ {
 		assert.Greater(t, vec1.Indices[i], vec1.Indices[i-1], "Indices must be strictly increasing")
 	}
 
-	// Repeated term "borrower" should have higher weight than single term "property"
-	// Let's verify non-zero values
 	for _, val := range vec1.Values {
 		assert.Greater(t, val, float32(0.0))
 	}

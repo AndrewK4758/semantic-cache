@@ -14,8 +14,6 @@ import (
 	"google.golang.org/protobuf/types/known/structpb"
 )
 
-// Empirical Challenger 1 Verification Suite for M3 R2
-
 func assertPanicMessageContains(t *testing.T, expectedSubstring string, fn func()) {
 	t.Helper()
 	var panicVal any
@@ -34,14 +32,12 @@ func assertPanicMessageContains(t *testing.T, expectedSubstring string, fn func(
 	}
 }
 
-// TestChallenger1_Empirical_StoreExtraction_FailFastPanics verifies panic behaviors on invalid identity and document_title
 func TestChallenger1_Empirical_StoreExtraction_FailFastPanics(t *testing.T) {
 	app := application.NewSemanticCacheApp(&mockEmbeddingService{}, &mockVectorStore{})
 	validId := &pb.InfrastructureIdentity{TenantId: "t-challenger", AppId: "a-challenger", JobId: "j-challenger"}
 	val, _ := structpb.NewValue("test text")
 	anyPayload, _ := anypb.New(val)
 
-	// 1. Missing/Invalid Identity Panics
 	invalidIdentities := []*pb.InfrastructureIdentity{
 		nil,
 		{TenantId: "", AppId: "app1"},
@@ -56,7 +52,6 @@ func TestChallenger1_Empirical_StoreExtraction_FailFastPanics(t *testing.T) {
 		})
 	}
 
-	// 2. Missing/Empty Document Title Panics
 	invalidTitles := []string{"", "   ", "\t\n"}
 	for _, title := range invalidTitles {
 		assertPanicMessageContains(t, "missing required property document_title", func() {
@@ -65,7 +60,6 @@ func TestChallenger1_Empirical_StoreExtraction_FailFastPanics(t *testing.T) {
 	}
 }
 
-// TestChallenger1_Empirical_CheckCache_VectorSearch_NilMetadata_Succeeds verifies vector search with nil metadata works without panic
 func TestChallenger1_Empirical_CheckCache_VectorSearch_NilMetadata_Succeeds(t *testing.T) {
 	searchCalled := false
 	var passedMetadata map[string]any
@@ -100,7 +94,7 @@ func TestChallenger1_Empirical_CheckCache_VectorSearch_NilMetadata_Succeeds(t *t
 	contract := &pb.CacheContract{
 		CollectionName: "test_coll",
 		Confidence:     0.90,
-		MetadataLookup: nil, // Metadata is nil
+		MetadataLookup: nil,
 	}
 	identity := &pb.InfrastructureIdentity{
 		TenantId: "t-challenger",

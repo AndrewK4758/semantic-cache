@@ -19,7 +19,7 @@ import (
 	"google.golang.org/protobuf/types/known/structpb"
 )
 
-// MockVectorStore implements domain.VectorStore for challenger tests.
+// MockVectorStore implements domain.VectorStore for testing.
 type MockVectorStore struct {
 	SearchFunc           func(ctx context.Context, collectionName string, vector []float32, identity *pb.InfrastructureIdentity, metadata map[string]any, limit int) ([]domain.SearchResult, error)
 	UpsertFunc           func(ctx context.Context, collectionName string, record domain.CacheRecord) error
@@ -80,7 +80,7 @@ func (m *MockVectorStore) HybridSearch(ctx context.Context, collectionName strin
 }
 
 
-// MockEmbedder implements domain.EmbeddingService for challenger tests.
+// MockEmbedder implements domain.EmbeddingService for testing.
 type MockEmbedder struct {
 	GenerateFunc func(ctx context.Context, text string) ([]float32, error)
 }
@@ -92,7 +92,7 @@ func (m *MockEmbedder) Generate(ctx context.Context, text string) ([]float32, er
 	return []float32{0.1, 0.2, 0.3}, nil
 }
 
-// MockJetStreamMsg implements jetstream.Msg for challenger tests.
+// MockJetStreamMsg implements jetstream.Msg for testing.
 type MockJetStreamMsg struct {
 	subject string
 	data    []byte
@@ -175,7 +175,6 @@ func (m *MockJetStreamMsg) InProgress() error {
 	return nil
 }
 
-// Empirical Test: Nil Metadata in Msg
 func TestChallenger_NilMetadataInMsg(t *testing.T) {
 	store := &MockVectorStore{}
 	embedder := &MockEmbedder{}
@@ -203,7 +202,7 @@ func TestChallenger_NilMetadataInMsg(t *testing.T) {
 	msg := &MockJetStreamMsg{
 		subject: "worker.cache.lookup",
 		data:    data,
-		meta:    nil, // NIL Metadata!
+		meta:    nil,
 	}
 
 	defer func() {
@@ -215,7 +214,6 @@ func TestChallenger_NilMetadataInMsg(t *testing.T) {
 	h.handleMessage(msg)
 }
 
-// Empirical Test: Error Variable Overwriting in CheckCache Failure
 func TestChallenger_CheckCacheErrorOverwrittenBySendReply(t *testing.T) {
 	checkCacheErr := errors.New("simulated vector store search failure")
 	store := &MockVectorStore{
@@ -261,7 +259,6 @@ func TestChallenger_CheckCacheErrorOverwrittenBySendReply(t *testing.T) {
 	}
 }
 
-// Empirical Test: Extreme Concurrency Stress Test on JetStreamHandler and App
 func TestChallenger_ExtremeConcurrencyStress(t *testing.T) {
 	store := &MockVectorStore{
 		SearchFunc: func(ctx context.Context, collectionName string, vector []float32, identity *pb.InfrastructureIdentity, metadata map[string]any, limit int) ([]domain.SearchResult, error) {
@@ -347,7 +344,6 @@ func TestChallenger_ExtremeConcurrencyStress(t *testing.T) {
 	wg.Wait()
 }
 
-// Empirical Test: Malformed Protobuf Data
 func TestChallenger_MalformedProtobufData(t *testing.T) {
 	store := &MockVectorStore{}
 	embedder := &MockEmbedder{}
@@ -369,7 +365,6 @@ func TestChallenger_MalformedProtobufData(t *testing.T) {
 	}
 }
 
-// Empirical Test: Background Update with Empty or Corrupt NodeOutput
 func TestChallenger_BackgroundUpdateCorruptNodeOutput(t *testing.T) {
 	store := &MockVectorStore{}
 	embedder := &MockEmbedder{}
@@ -404,7 +399,6 @@ func TestChallenger_BackgroundUpdateCorruptNodeOutput(t *testing.T) {
 	}
 }
 
-// Empirical Test: StoreExtraction with Precomputed Vector Any
 func TestChallenger_StoreExtractionWithPrecomputedVector(t *testing.T) {
 	var storedRecord domain.CacheRecord
 	store := &MockVectorStore{
@@ -416,7 +410,6 @@ func TestChallenger_StoreExtractionWithPrecomputedVector(t *testing.T) {
 	embedder := &MockEmbedder{}
 	app := application.NewSemanticCacheApp(embedder, store)
 
-	// Create list value any for vector [0.5, 0.6, 0.7]
 	listVal, _ := structpb.NewList([]any{0.5, 0.6, 0.7})
 	anyVec, _ := anypb.New(listVal)
 

@@ -18,9 +18,8 @@ func createTestStruct(m map[string]any) *structpb.Struct {
 	return s
 }
 
-// TestM2Challenger_SemanticCache_NodeNameStrict verifies strict node_name extraction
+// TestM2Challenger_SemanticCache_NodeNameStrict verifies strict node_name extraction.
 func TestM2Challenger_SemanticCache_NodeNameStrict(t *testing.T) {
-	// Scenario 1: Valid node_name in node_config
 	validPayload := createTestStruct(map[string]any{
 		payloadkeys.NodeConfigKey: map[string]any{
 			"node_name": "SemanticCacheWorker",
@@ -33,7 +32,7 @@ func TestM2Challenger_SemanticCache_NodeNameStrict(t *testing.T) {
 		t.Fatalf("expected node_name 'SemanticCacheWorker', got %q, err %v", nodeName, err)
 	}
 
-	// Scenario 2: Legacy PascalCase NodeName at node_config -> Must fail fast
+	// Legacy PascalCase NodeName in node_config must be rejected.
 	legacyPayload := createTestStruct(map[string]any{
 		payloadkeys.NodeConfigKey: map[string]any{
 			"NodeName": "SemanticCacheWorker",
@@ -46,7 +45,7 @@ func TestM2Challenger_SemanticCache_NodeNameStrict(t *testing.T) {
 		t.Fatalf("CRITICAL SECURITY / DRIFT FAIL: GetNodeNameStrict accepted legacy PascalCase 'NodeName'")
 	}
 
-	// Scenario 3: Root payload node_name -> Must fail fast
+	// Root-level node_name must be rejected.
 	rootPayload := createTestStruct(map[string]any{
 		"node_name": "SemanticCacheWorker",
 	})

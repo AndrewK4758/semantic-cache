@@ -146,13 +146,12 @@ func (a *SemanticCacheApp) CheckCache(ctx context.Context, contract *pb.CacheCon
 		logger.Info("SemanticCache", "INFO: [SemanticCacheApp] Query Input received (length: %d)", len(text))
 	}
 
-	// Extract metadata from CacheContract
 	var metaMap map[string]any
 	if contract.MetadataLookup != nil {
 		metaMap = contract.MetadataLookup.AsMap()
 	}
 
-	// STAGE 1: METADATA LOOKUP (Bypass LLM embedding generation)
+	// Attempt an exact metadata match first to avoid generating an embedding if possible.
 	strictMetaMap := make(map[string]any)
 	if metaMap != nil {
 		if val, ok := metaMap["subject_class"]; ok {
@@ -173,7 +172,7 @@ func (a *SemanticCacheApp) CheckCache(ctx context.Context, contract *pb.CacheCon
 		logger.Info("SemanticCache", "INFO: [SemanticCacheApp] Stage 1 Skipped: No subject_class provided. Falling back to Stage 2.")
 	}
 
-	// STAGE 2: EMBEDDING FALLBACK
+	// Fall back to vector similarity search when no exact metadata match is found.
 	var vector []float32
 	var embedErr error
 	if contract.EmbeddingLookup != nil {
@@ -196,8 +195,8 @@ func (a *SemanticCacheApp) CheckCache(ctx context.Context, contract *pb.CacheCon
 		logger.Info("SemanticCache", "INFO: [SemanticCacheApp] Stage 2: Using pre-computed vector from EmbeddingLookup of length %d", len(vector))
 	}
 
-	// Do NOT pass subject_class into Search filter, leave empty map
-	threshold = 0.975 // Ensure threshold is set to 0.975
+	// Omit metadata filters during vector search so semantic matches aren't restricted by subject_class.
+	threshold = 0.975
 
 	logger.Info("SemanticCache", "INFO: [SemanticCacheApp] Searching Qdrant Vector Store for top 1 match with nil Metadata Filter")
 	results, searchErr := a.store.Search(ctx, collectionName, vector, identity, nil, 1)

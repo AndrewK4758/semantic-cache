@@ -23,18 +23,16 @@ import (
 )
 
 func main() {
-	// Attempt to load .env but ignore error if it doesn't exist
+	// Ignore missing .env files when configuration is provided directly via environment variables.
 	envutil.LoadEnv(".env", "semantic_cache_service/.env", "../.env", "../../.env")
 	logger.InitLogger()
 
-	// Configuration
 	grpcPort := envutil.MustGetString("GRPC_PORT")
 	qdrantAddr := envutil.MustGetString("QDRANT_URL")
 	openaiURL := envutil.GetStringOrDefault("EMBEDDING_BASE_URL", envutil.MustGetString("OPENAI_BASE_URL"))
 	openaiModel := envutil.MustGetEmbeddingModel()
 	collectionName := envutil.MustGetString("QDRANT_COLLECTION")
 
-	// Infrastructure
 	openaiClient := openai.NewClient(openaiURL, openaiModel)
 
 	qdrantClient, err := qdrant.NewClient(qdrantAddr, collectionName)
@@ -44,13 +42,9 @@ func main() {
 	}
 	defer qdrantClient.Close()
 
-	// Application
 	app := application.NewSemanticCacheApp(openaiClient, qdrantClient)
-
-	// Presentation (gRPC)
 	handler := grpchandler.NewSemanticCacheHandler(app)
 
-	// Messaging (JetStream)
 	natsURL := envutil.MustGetString("NATS_URL")
 	jsHandler, err := messaging.NewJetStreamHandler(natsURL, app)
 	if err != nil {
@@ -64,7 +58,6 @@ func main() {
 		panic(fmt.Errorf("failed to start JetStream consumers: %w", err))
 	}
 
-	// gRPC Server Setup
 	lis, err := net.Listen("tcp", ":"+grpcPort)
 	if err != nil {
 		logger.Error("SemanticCache", "Failed to listen on port %s: %v", grpcPort, err)
@@ -75,7 +68,6 @@ func main() {
 	pb.RegisterSemanticCacheServiceServer(grpcServer, handler)
 	reflection.Register(grpcServer)
 
-	// Graceful Shutdown
 	go func() {
 		logger.Info("SemanticCache", "Semantic Cache Service listening on port %s", grpcPort)
 		if err := grpcServer.Serve(lis); err != nil {

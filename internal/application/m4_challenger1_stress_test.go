@@ -119,7 +119,6 @@ func TestM4Challenger_HighConcurrency_MultiTenant_Isolation(t *testing.T) {
 	ctx, cancel := context.WithTimeout(context.Background(), 10*time.Second)
 	defer cancel()
 
-	// Launch 100 concurrent workers storing and searching cache entries
 	for i := 0; i < numWorkers; i++ {
 		workerID := i
 		go func() {
@@ -136,7 +135,6 @@ func TestM4Challenger_HighConcurrency_MultiTenant_Isolation(t *testing.T) {
 				JobId:    jobID,
 			}
 
-			// Step 1: Store Extraction
 			metaMap := map[string]any{
 				"custom_ref": fmt.Sprintf("ref_%d", workerID),
 			}
@@ -149,7 +147,6 @@ func TestM4Challenger_HighConcurrency_MultiTenant_Isolation(t *testing.T) {
 				return
 			}
 
-			// Step 2: Check Cache (Exact Metadata Match or Vector Search)
 			metaStruct, _ := structpb.NewStruct(metaMap)
 			contract := &pb.CacheContract{
 				CollectionName: "testing_stress_collection",
@@ -185,7 +182,7 @@ func TestM4Challenger_HighConcurrency_MultiTenant_Isolation(t *testing.T) {
 	}
 }
 
-// TestM4Challenger_ZeroFallback_IdentityAndInputFailures verifies fail-fast zero-fallback rules.
+// TestM4Challenger_ZeroFallback_IdentityAndInputFailures verifies that missing identity or document_title fields panic immediately.
 func TestM4Challenger_ZeroFallback_IdentityAndInputFailures(t *testing.T) {
 	storeMock := newConcurrentMockVectorStore()
 	embedMock := &mockEmbeddingService{}
@@ -193,7 +190,6 @@ func TestM4Challenger_ZeroFallback_IdentityAndInputFailures(t *testing.T) {
 
 	contract := &pb.CacheContract{CollectionName: "coll_test"}
 
-	// Test 1: CheckCache with missing TenantId / AppId
 	invalidIdentities := []*pb.InfrastructureIdentity{
 		nil,
 		{TenantId: "", AppId: "app1"},
@@ -213,7 +209,6 @@ func TestM4Challenger_ZeroFallback_IdentityAndInputFailures(t *testing.T) {
 		}()
 	}
 
-	// Test 2: StoreExtraction with missing DocumentTitle
 	identityValid := &pb.InfrastructureIdentity{TenantId: "t1", AppId: "a1"}
 	func() {
 		defer func() {
@@ -224,7 +219,6 @@ func TestM4Challenger_ZeroFallback_IdentityAndInputFailures(t *testing.T) {
 		_ = app.StoreExtraction(context.Background(), "testing_coll_test", identityValid, map[string]any{"document_title": "", "subject_class": "CLOSING", "TemplateHash": "hash"}, "", nil)
 	}()
 
-	// Test 3: StoreExtraction with invalid identity
 	for idx, id := range invalidIdentities {
 		func() {
 			defer func() {

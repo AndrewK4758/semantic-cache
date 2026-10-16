@@ -190,8 +190,7 @@ func (h *SemanticCacheHandler) RegisterBlankDocument(ctx context.Context, req *p
 	if req.EmbeddingPayload == nil {
 		return nil, status.Error(codes.InvalidArgument, "EmbeddingPayload cannot be empty")
 	}
-	// For blank document registration, we can just use a constant or extract string if needed for payload.
-	// We'll store a placeholder payload for blank documents
+	// Store sentinel metadata and payload for blank document templates.
 	blankMeta := map[string]any{
 		"subject_class":  "BLANK_DOCUMENT",
 		"document_title": "BLANK_DOCUMENT",

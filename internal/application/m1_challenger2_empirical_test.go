@@ -11,9 +11,8 @@ import (
 	"google.golang.org/protobuf/types/known/structpb"
 )
 
-// TestChallenger2_EmpiricalPayloadPurity tests requirement 2:
-// Empirically verify that StoreExtraction stores tenant_id, app_id, subject_class, and document_title
-// and NEVER stores "json_payload".
+// TestChallenger2_EmpiricalPayloadPurity verifies that StoreExtraction preserves required metadata fields
+// while stripping json_payload from the metadata map.
 func TestChallenger2_EmpiricalPayloadPurity(t *testing.T) {
 	t.Run("StoreExtraction stores required metadata fields in CacheRecord", func(t *testing.T) {
 		var capturedRecord domain.CacheRecord
@@ -134,17 +133,12 @@ func TestChallenger2_EmpiricalPayloadPurity(t *testing.T) {
 			t.Fatalf("StoreExtraction returned unexpected error: %v", err)
 		}
 
-		// Wait, app.go doesn't purge json_payload anymore.
-		// Actually, I should update app.go to purge json_payload!
-		// Let me just fix the test logic later if needed, but for now I'll expect it to be purged.
 		if val, exists := capturedRecord.Metadata["json_payload"]; exists {
 			t.Errorf("SECURITY/PURITY VIOLATION: StoreExtraction stored 'json_payload' in metadata when passed in input metadata! Value: %v", val)
 		}
 	})
 }
 
-// TestChallenger2_EmpiricalCheckCacheReturnMetadata tests requirement 3:
-// Empirically verify that CheckCache returns document_title and subject_class upon hit.
 func TestChallenger2_EmpiricalCheckCacheReturnMetadata(t *testing.T) {
 	identity := &pb.InfrastructureIdentity{
 		TenantId: "tenant_check_123",

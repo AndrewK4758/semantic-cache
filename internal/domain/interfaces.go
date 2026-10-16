@@ -18,7 +18,6 @@ type VectorStore interface {
 	CheckMetadata(ctx context.Context, collectionName string, identity *pb.InfrastructureIdentity, metadata map[string]any) (bool, error)
 	GetByMetadata(ctx context.Context, collectionName string, identity *pb.InfrastructureIdentity, metadata map[string]any) ([]SearchResult, error)
 
-    // EnsureCollection Hybrid vector store methods
 	EnsureCollection(ctx context.Context, collectionName string, denseDim uint64, pqCompression uint32) error
 	UpsertHybrid(ctx context.Context, collectionName string, record CacheRecord) error
 	HybridSearch(ctx context.Context, collectionName string, denseVector []float32, sparseVector *SparseVector, identity *pb.InfrastructureIdentity, metadata map[string]any, alpha float32, limit int) ([]SearchResult, error)

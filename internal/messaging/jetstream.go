@@ -281,7 +281,6 @@ func (h *JetStreamHandler) handleMessage(msg jetstream.Msg) {
 	}
 
 	if strings.HasPrefix(subject, "worker.cache.lookup") {
-		// Cache Lookup
 		hit, payload, confidence, err := h.app.CheckCache(ctx, cacheConfig, req.Identity)
 		if err != nil {
 			logger.Error("SemanticCache", "CheckCache failed: %v", err)
@@ -337,7 +336,6 @@ func (h *JetStreamHandler) handleMessage(msg jetstream.Msg) {
 		}
 		payloadToStore := string(payloadBytes)
 
-		// Cache Update
 		err = h.app.StoreExtraction(ctx, cacheConfig.CollectionName, req.Identity, metadata, payloadToStore, cacheConfig.EmbeddingLookup)
 		if err != nil {
 			logger.Error("SemanticCache", "StoreExtraction failed: %v", err)
@@ -428,7 +426,6 @@ func (h *JetStreamHandler) sendSuccessReply(ctx context.Context, msg jetstream.M
 		return nil
 	}
 
-	// Convert the result JSON back to a Struct for the response
 	var resultStruct structpb.Struct
 	if err := protojson.Unmarshal([]byte(resultJson), &resultStruct); err != nil {
 		logger.Error("SemanticCache", "Failed to unmarshal result JSON into Struct: %v", err)

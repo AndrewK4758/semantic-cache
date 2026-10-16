@@ -61,7 +61,6 @@ func TestM4_QdrantGenericMetadataPayload_PurgesForbiddenFields(t *testing.T) {
 		t.Fatalf("StoreExtraction failed unexpectedly: %v", err)
 	}
 
-	// Assert generic identity & metadata fields are saved
 	if capturedRecord.Identity.TenantId != "tenant_vault" {
 		t.Errorf("Expected Identity.TenantId 'tenant_vault', got %v", capturedRecord.Identity.TenantId)
 	}
@@ -72,7 +71,6 @@ func TestM4_QdrantGenericMetadataPayload_PurgesForbiddenFields(t *testing.T) {
 		t.Errorf("Expected document_title 'E2E Title', got %v", capturedRecord.Metadata["document_title"])
 	}
 
-	// Assert forbidden fields are purged
 	if _, exists := capturedRecord.Metadata["json_payload"]; exists {
 		t.Errorf("Forbidden field 'json_payload' was NOT purged from metadata payload!")
 	}
@@ -80,7 +78,6 @@ func TestM4_QdrantGenericMetadataPayload_PurgesForbiddenFields(t *testing.T) {
 		t.Errorf("Forbidden field 'job_id' was NOT purged from metadata payload!")
 	}
 
-	// Assert custom allowed fields persist
 	if capturedRecord.Metadata["e2e_flag"] != true {
 		t.Errorf("Expected e2e_flag true, got %v", capturedRecord.Metadata["e2e_flag"])
 	}
@@ -212,7 +209,6 @@ func TestM4_BackgroundUpdate_WarmupAndSubsequentCacheHit(t *testing.T) {
 		Confidence:     0.975,
 	}
 
-	// Step 1: Initial CheckCache should result in a Cache Miss
 	hit, _, _, err := app.CheckCache(ctx, contract, identity)
 	if err != nil {
 		t.Fatalf("Initial CheckCache failed: %v", err)
@@ -221,7 +217,6 @@ func TestM4_BackgroundUpdate_WarmupAndSubsequentCacheHit(t *testing.T) {
 		t.Fatalf("Expected initial CheckCache to be a miss, but got hit=true")
 	}
 
-	// Step 2: StoreExtraction simulates background update indexing after AI execution
 	metadata := map[string]any{
 		"subject_class":  "Borrower: Olivet, Order #: 76168546",
 		"document_title": "Closing Disclosure",
@@ -236,7 +231,6 @@ func TestM4_BackgroundUpdate_WarmupAndSubsequentCacheHit(t *testing.T) {
 		t.Fatalf("StoreExtraction failed: %v", err)
 	}
 
-	// Step 3: Second CheckCache on identical/similar document should produce a Cache Hit
 	hit2, payload2, conf2, err2 := app.CheckCache(ctx, contract, identity)
 	if err2 != nil {
 		t.Fatalf("Second CheckCache failed: %v", err2)

@@ -58,7 +58,6 @@ func TestChallenger2_EmpiricalQdrantUpsertPayloadPurity(t *testing.T) {
 
 	pointPayload := mockServer.capturedUpsertReq.Points[0].Payload
 
-	// Verify required keys exist
 	if tId, ok := pointPayload["tenant_id"]; !ok || tId.GetStringValue() != "tenant_qdrant_123" {
 		t.Errorf("Expected payload['tenant_id'] = 'tenant_qdrant_123', got %v", tId)
 	}
@@ -72,7 +71,6 @@ func TestChallenger2_EmpiricalQdrantUpsertPayloadPurity(t *testing.T) {
 		t.Errorf("Expected payload['subject_class'] = 'CLOSING_QDRANT', got %v", sc)
 	}
 
-	// Verify forbidden keys DO NOT exist
 	if jp, ok := pointPayload["json_payload"]; ok {
 		t.Errorf("VIOLATION: Qdrant Upsert payload contains forbidden key 'json_payload': %v", jp.GetStringValue())
 	}

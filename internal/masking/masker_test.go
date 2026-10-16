@@ -23,23 +23,20 @@ func TestEntityMasker_SequentialNaturalSurrogates(t *testing.T) {
 
 	maskedText, surrogateMap, totalCount := masker.MaskText(text, entities)
 
-	// Verify natural replacements
 	assert.Contains(t, maskedText, "Person A")
 	assert.Contains(t, maskedText, "Person B")
 	assert.Contains(t, maskedText, "Location 1")
 	assert.Contains(t, maskedText, "Date 1")
 
-	// Verify coreference: John Doe appears twice, both should be replaced with Person A
+	// Coreference: John Doe appears twice and both occurrences should map to Person A.
 	assert.NotContains(t, maskedText, "John Doe")
 	assert.NotContains(t, maskedText, "Jane Smith")
 	assert.NotContains(t, maskedText, "123 Main St, Atlanta, GA")
 	assert.NotContains(t, maskedText, "2026-08-15")
 
-	// Ensure zero bracketed tokens
 	assert.NotContains(t, maskedText, "[PERSON")
 	assert.NotContains(t, maskedText, "<LOCATION")
 
-	// Verify mapping table
 	assert.Equal(t, "Person A", surrogateMap["John Doe"])
 	assert.Equal(t, "Person B", surrogateMap["Jane Smith"])
 	assert.Equal(t, "Location 1", surrogateMap["123 Main St, Atlanta, GA"])

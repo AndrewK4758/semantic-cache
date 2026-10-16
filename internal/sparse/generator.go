@@ -9,13 +9,13 @@ import (
 
 const maxSparseIndex = 1048576 // 2^20
 
-// Vector SparseVector holds sorted indices and their non-zero weights.
+// Vector holds sorted sparse indices and their non-zero weights.
 type Vector struct {
 	Indices []uint32  `json:"indices"`
 	Values  []float32 `json:"values"`
 }
 
-// Generator SparseGenerator converts text into term-frequency sparse vectors.
+// Generator converts text into term-frequency sparse vectors.
 type Generator struct{}
 
 // NewSparseGenerator creates a new sparse vector generator.
@@ -54,7 +54,6 @@ func (g *Generator) Generate(text string) Vector {
 		}
 	}
 
-	// Compute term frequencies per token
 	tfMap := make(map[uint32]float32)
 	for _, tok := range tokens {
 		if len(tok) == 0 {
@@ -68,7 +67,7 @@ func (g *Generator) Generate(text string) Vector {
 		return Vector{}
 	}
 
-	// Collect unique indices and sort them in ascending order
+	// Qdrant requires sparse vector indices to be strictly sorted in ascending order.
 	indices := make([]uint32, 0, len(tfMap))
 	for idx := range tfMap {
 		indices = append(indices, idx)

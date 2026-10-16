@@ -203,8 +203,6 @@ func TestChallenger2_JetStream_BackgroundUpdate_MissingNodeOutput_Panics(t *test
 		Payload:     payloadStruct,
 	}
 
-	// Inject non-empty EmbeddingLookup into cache struct via raw payload Map or proto
-	// Create cache struct with embedding lookup or inference_input_key
 	payloadStruct, _ = structpb.NewStruct(map[string]any{
 		payloadkeys.NodeConfigKey: map[string]any{
 			"node_name":           "SemanticCacheWorker",

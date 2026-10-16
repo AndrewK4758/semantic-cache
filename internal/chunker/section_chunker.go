@@ -135,7 +135,6 @@ func (sc *SectionChunker) ChunkDocument(doc, documentType string, identity *pb.I
 			continue
 		}
 
-		// Text paragraph splitting
 		secTokens := EstimateTokens(secBody)
 		if secTokens <= effectiveMaxTokens {
 			chunkIndex++
@@ -177,7 +176,7 @@ func (sc *SectionChunker) ChunkDocument(doc, documentType string, identity *pb.I
 					TokenCount:   int32(EstimateTokens(fullContent)),
 				})
 
-				// Keep last element for overlap if specified
+				// Carry the trailing paragraph into the next chunk to preserve cross-boundary context.
 				if sc.overlapTokens > 0 && len(currentBlock) > 1 {
 					lastP := currentBlock[len(currentBlock)-1]
 					currentBlock = []string{lastP, pTrim}

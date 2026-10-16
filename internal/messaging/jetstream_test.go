@@ -104,7 +104,7 @@ func TestHandleMessage_MaxDeliveryAttemptsExceeded_TerminatesMessage(t *testing.
 	msg := &mockCacheMsg{
 		data:     data,
 		subject:  "worker.cache.lookup",
-		numDeliv: 6, // > 5
+		numDeliv: 6,
 	}
 
 	handler.handleMessage(msg)

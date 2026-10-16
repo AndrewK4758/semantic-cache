@@ -12,8 +12,6 @@ import (
 	"google.golang.org/protobuf/types/known/structpb"
 )
 
-// --- Mocks ---
-
 type mockEmbeddingService struct {
 	generateFn func(ctx context.Context, text string) ([]float32, error)
 }
@@ -79,8 +77,6 @@ func (m *mockVectorStore) HybridSearch(ctx context.Context, collectionName strin
 	}, nil
 }
 
-
-// --- Tests ---
 
 func TestSemanticCacheApp_CheckCache(t *testing.T) {
 	type args struct {
